@@ -1,10 +1,9 @@
-require('dotenv').config();
 const http = require('http');
 const path = require('path');
 const express = require('express');
 const { Server } = require('socket.io');
 const rm = require('./roomManager');
-const { DIFF_DESC, ALL_WORDS } = require('./gameEngine');
+const { DIFF_DESC, ALL_WORDS, candidatesFor, suggestStartWords } = require('./gameEngine');
 
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -44,13 +43,41 @@ const singleTimers = new Map(); // gameId -> timeout handle
 function scheduleSingleTimer(state) {
   clearSingleTimer(state.gameId);
   if (state.status !== 'playing') return;
-  const handle = setTimeout(() => {
+  const handle = setTimeout(async () => {
     const result = rm.applySingleTimeout(state);
+    let suggestions = [];
+    if (result.finished) {
+      // 시간 초과로 졌을 때, 그 순간 실제로 쓸 수 있었던 단어를 몇 개 뽑아서 알려준다.
+      // (이 게임 로직상, 후보가 아예 0개였다면 애초에 타임아웃 전에 즉시 종료됐을 것이므로
+      //  여기 도달했다는 건 최소 1개 이상의 유효한 단어가 실제로 존재했다는 뜻이다.)
+      const lastWord = state.chain.length ? state.chain[state.chain.length - 1].word : null;
+      if (lastWord) {
+        const cands = await candidatesFor(lastWord, state.usedWords, state.allowDueum, state.handicap);
+        suggestions = cands
+          .slice()
+          .sort((a, b) => a.length - b.length)
+          .slice(0, 3);
+      } else {
+        // 아직 첫 단어도 안 낸 상태에서 시간 초과 — 아무 단어나(핸디캡만 만족하면) 추천
+        suggestions = await suggestStartWords(state.handicap, 3);
+      }
+    }
     io.to(state.socketId).emit('single:timeout', {
       gauge: state.gauge,
       finished: result.finished,
       winner: result.winner || null,
+      suggestions,
     });
+    if (result.finished) {
+      rm.recordResult({
+        name: state.name,
+        level: state.level,
+        myScore: state.myScore,
+        aiScore: state.aiScore,
+        won: result.winner === 'me',
+        allowDueum: state.allowDueum,
+      });
+    }
     if (!result.finished) scheduleSingleTimer(state);
     else clearSingleTimer(state.gameId);
   }, SINGLE_TURN_LIMIT_MS);
@@ -64,10 +91,18 @@ function clearSingleTimer(gameId) {
   }
 }
 
+// 클라이언트가 보낸 handicap 값을 신뢰하지 않고, 정확히 boolean 두 개만 남긴다.
+function sanitizeHandicap(h) {
+  return {
+    threeOnly: !!(h && h.threeOnly),
+    noLoanwords: !!(h && h.noLoanwords),
+  };
+}
+
 io.on('connection', (socket) => {
   // ---------- 싱글플레이 (vs AI) ----------
-  socket.on('single:start', ({ name, level, allowDueum }, ack) => {
-    const state = rm.createSingleGame({ socketId: socket.id, name: name || '플레이어', level: Number(level) || 0, allowDueum: !!allowDueum });
+  socket.on('single:start', ({ name, level, allowDueum, handicap }, ack) => {
+    const state = rm.createSingleGame({ socketId: socket.id, name: name || '플레이어', level: Number(level) || 0, allowDueum: !!allowDueum, handicap: sanitizeHandicap(handicap) });
     ack &&
       ack({
         ok: true,
@@ -75,6 +110,7 @@ io.on('connection', (socket) => {
         level: state.level,
         levelDesc: DIFF_DESC[state.level],
         allowDueum: state.allowDueum,
+        handicap: state.handicap,
         gauge: state.gauge,
         gaugeMax: rm.GAUGE_MAX,
         shareCode: state.shareCode,
@@ -85,10 +121,27 @@ io.on('connection', (socket) => {
   socket.on('single:submit', async ({ gameId, word }, ack) => {
     const result = await rm.submitSingleWord({ gameId, word });
     if (result.ok) {
-      if (result.finished) clearSingleTimer(gameId);
-      else scheduleSingleTimer(result.state);
+      if (result.finished) {
+        clearSingleTimer(gameId);
+        rm.recordResult({
+          name: result.state.name,
+          level: result.state.level,
+          myScore: result.state.myScore,
+          aiScore: result.state.aiScore,
+          won: result.winner === 'me',
+          allowDueum: result.state.allowDueum,
+        });
+      } else {
+        scheduleSingleTimer(result.state);
+      }
     }
     ack && ack(result);
+  });
+
+  // 랭킹 조회 (이긴 기록 중 난이도 높은 순 → 점수 높은 순)
+  socket.on('leaderboard:get', (payload, ack) => {
+    const mode = payload && payload.mode === 'longest' ? 'longest' : 'fastest';
+    ack && ack({ ok: true, mode, entries: rm.getLeaderboard(mode, 20) });
   });
 
   // 친구가 초대 링크(?invite=코드)로 접속해서 자동으로 호출하는 이벤트.
@@ -101,8 +154,8 @@ io.on('connection', (socket) => {
   });
 
   // ---------- 방 만들기 / 참가 / 랜덤매칭 ----------
-  socket.on('room:create', ({ name, maxPlayers, timeLimit, teamMode, allowDueum }, ack) => {
-    const room = rm.createRoom({ hostSocketId: socket.id, name: name || '방장', maxPlayers, timeLimit, teamMode, allowDueum });
+  socket.on('room:create', ({ name, maxPlayers, timeLimit, teamMode, allowDueum, handicap }, ack) => {
+    const room = rm.createRoom({ hostSocketId: socket.id, name: name || '방장', maxPlayers, timeLimit, teamMode, allowDueum, handicap: sanitizeHandicap(handicap) });
     socket.join(room.code);
     ack && ack({ ok: true, room: rm.publicRoom(room) });
   });

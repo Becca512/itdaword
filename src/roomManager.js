@@ -23,6 +23,7 @@ function publicRoom(room) {
     timeLimit: room.timeLimit,
     teamMode: room.teamMode,
     allowDueum: room.allowDueum,
+    handicap: room.handicap,
     status: room.status,
     players: room.players.map((p) => ({ id: p.id, name: p.name, team: p.team, connected: p.connected })),
     chain: room.chain,
@@ -47,7 +48,7 @@ function assignTeam(room) {
 }
 
 // ---------- 방 생성 / 참가 ----------
-function createRoom({ hostSocketId, name, maxPlayers, timeLimit, teamMode, allowDueum }) {
+function createRoom({ hostSocketId, name, maxPlayers, timeLimit, teamMode, allowDueum, handicap }) {
   const code = genCode();
   const room = {
     code,
@@ -56,6 +57,7 @@ function createRoom({ hostSocketId, name, maxPlayers, timeLimit, teamMode, allow
     timeLimit: Math.min(60, Math.max(5, timeLimit || 20)),
     teamMode: !!teamMode,
     allowDueum: !!allowDueum,
+    handicap: handicap || {},
     status: 'lobby',
     players: [{ id: hostSocketId, name, team: teamMode ? 'A' : null, connected: true }],
     chain: [],
@@ -91,7 +93,7 @@ function quickMatch({ socketId, name }) {
     }
     quickmatchQueue.shift();
   }
-  const room = createRoom({ hostSocketId: socketId, name, maxPlayers: 4, timeLimit: 20, teamMode: false, allowDueum: false });
+  const room = createRoom({ hostSocketId: socketId, name, maxPlayers: 4, timeLimit: 20, teamMode: false, allowDueum: false, handicap: {} });
   quickmatchQueue.push(room.code);
   return { room, created: true };
 }
@@ -170,7 +172,7 @@ async function submitWord({ code, socketId, word }) {
   if (curId !== socketId) return { ok: false, reason: '내 차례가 아니에요.' };
 
   const prev = room.chain.length ? room.chain[room.chain.length - 1].word : null;
-  const check = await isValidNext(prev, word, room.usedWords, room.allowDueum);
+  const check = await isValidNext(prev, word, room.usedWords, room.allowDueum, room.handicap);
   if (!check.ok) return { ok: false, reason: check.reason, room };
 
   // 검증 중에 상태가 바뀌었을 수 있으니(다른 탈락 처리 등) 한 번 더 확인
@@ -184,7 +186,7 @@ async function submitWord({ code, socketId, word }) {
   room.currentTurn += 1;
   room.lastMoveAt = Date.now();
 
-  const nextOpts = await candidatesFor(check.word, room.usedWords, room.allowDueum);
+  const nextOpts = await candidatesFor(check.word, room.usedWords, room.allowDueum, room.handicap);
   let finished = false;
   if (nextOpts.length === 0) {
     room.status = 'finished';
@@ -225,7 +227,7 @@ function genShareCode() {
   return c;
 }
 
-function createSingleGame({ socketId, name, level, allowDueum }) {
+function createSingleGame({ socketId, name, level, allowDueum, handicap }) {
   const gameId = genId('sg');
   const shareCode = genShareCode();
   const state = {
@@ -234,6 +236,7 @@ function createSingleGame({ socketId, name, level, allowDueum }) {
     name,
     level: Math.min(10, Math.max(0, level)),
     allowDueum: !!allowDueum,
+    handicap: handicap || {},
     chain: [],
     usedWords: new Set(),
     myScore: 0,
@@ -280,7 +283,7 @@ async function submitSingleWord({ gameId, word }) {
   state.busy = true;
   try {
     const prev = state.chain.length ? state.chain[state.chain.length - 1].word : null;
-    const check = await isValidNext(prev, word, state.usedWords, state.allowDueum);
+    const check = await isValidNext(prev, word, state.usedWords, state.allowDueum, state.handicap);
     if (!check.ok) return { ok: false, reason: check.reason };
     if (state.status !== 'playing') return { ok: false, reason: '진행 중인 게임이 아니에요.' };
 
@@ -288,17 +291,17 @@ async function submitSingleWord({ gameId, word }) {
     state.usedWords.add(check.word);
     state.myScore += 1;
 
-    const aiOpts = await candidatesFor(check.word, state.usedWords, state.allowDueum);
+    const aiOpts = await candidatesFor(check.word, state.usedWords, state.allowDueum, state.handicap);
     if (aiOpts.length === 0) {
       state.status = 'finished';
       return { ok: true, state, finished: true, winner: 'me' };
     }
-    const aiWord = await aiPickWord(check.word, state.usedWords, state.level, state.allowDueum);
+    const aiWord = await aiPickWord(check.word, state.usedWords, state.level, state.allowDueum, state.handicap);
     state.chain.push({ word: aiWord, who: 'ai' });
     state.usedWords.add(aiWord);
     state.aiScore += 1;
 
-    const nextOpts = await candidatesFor(aiWord, state.usedWords, state.allowDueum);
+    const nextOpts = await candidatesFor(aiWord, state.usedWords, state.allowDueum, state.handicap);
     if (nextOpts.length === 0) {
       state.status = 'finished';
       return { ok: true, state, finished: true, winner: 'ai' };
@@ -307,6 +310,41 @@ async function submitSingleWord({ gameId, word }) {
   } finally {
     state.busy = false;
   }
+}
+
+// ---------- 랭킹 (인메모리 — 서버 재시작하면 초기화됨. 영구 저장하려면 DB 필요) ----------
+const leaderboard = []; // { name, level, myScore, aiScore, won, allowDueum, ts }
+const LEADERBOARD_MAX_ENTRIES = 500;
+
+function recordResult({ name, level, myScore, aiScore, won, allowDueum }) {
+  leaderboard.push({
+    name: (name || '플레이어').slice(0, 20),
+    level,
+    myScore,
+    aiScore,
+    won: !!won,
+    allowDueum: !!allowDueum,
+    ts: Date.now(),
+  });
+  if (leaderboard.length > LEADERBOARD_MAX_ENTRIES) leaderboard.shift();
+}
+
+// 랭킹 두 가지 기준
+//  - 'fastest' : AI와 겨뤄서 이긴 기록 중, 난이도 높은 순 → 그 안에서 가장 적은 턴(빠른 승리) 순
+//  - 'longest' : 승패 상관없이, 한 게임에서 이어간 단어 총 개수(내 턴+AI 턴)가 가장 많은 순
+function getLeaderboard(mode, limit) {
+  const n = limit || 20;
+  if (mode === 'longest') {
+    return leaderboard
+      .slice()
+      .sort((a, b) => (b.myScore + b.aiScore) - (a.myScore + a.aiScore) || b.ts - a.ts)
+      .slice(0, n);
+  }
+  return leaderboard
+    .filter((e) => e.won)
+    .slice()
+    .sort((a, b) => b.level - a.level || a.myScore - b.myScore || b.ts - a.ts)
+    .slice(0, n);
 }
 
 module.exports = {
@@ -325,6 +363,8 @@ module.exports = {
   submitSingleWord,
   redeemFriendCode,
   applySingleTimeout,
+  recordResult,
+  getLeaderboard,
   singleGames,
   playerName,
   playerTeam,

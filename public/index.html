@@ -142,6 +142,16 @@
   .rules-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;}
   .rules-list li{font-size:13px;color:var(--text-dim);line-height:1.5;font-weight:500;}
   .rules-list li b{color:var(--text);font-weight:800;}
+  .lb-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--panel-2);margin-bottom:8px;}
+  .lb-rank{flex:none;width:32px;text-align:center;font-weight:900;font-size:16px;color:var(--text-dim);}
+  .lb-row:nth-child(1) .lb-rank{color:var(--yellow);font-size:20px;}
+  .lb-row:nth-child(2) .lb-rank{color:#d9d9e0;font-size:18px;}
+  .lb-row:nth-child(3) .lb-rank{color:#e0a468;font-size:18px;}
+  .lb-info{flex:1;min-width:0;}
+  .lb-name{font-weight:800;font-size:15px;}
+  .lb-meta{font-size:11px;color:var(--text-dim);font-weight:600;}
+  .lb-score{flex:none;font-weight:900;font-size:16px;color:var(--orange);}
+  .lb-empty{text-align:center;color:var(--text-dim);padding:24px 0;font-size:13px;}
   .rule-hint{font-size:11px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:7px 12px;margin-bottom:14px;text-align:center;letter-spacing:0.2px;font-weight:700;}
   .gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
   .gauge-label{font-size:11px;color:var(--text-dim);flex:none;white-space:nowrap;font-weight:700;}
@@ -154,6 +164,11 @@
   .invite-box input{background:#0F1116;border:2px solid var(--pink);color:var(--text);border-radius:14px;padding:10px 14px;font-size:12px;font-family:inherit;flex:1;min-width:0;}
   .invite-box .btn{flex:none;padding:10px 16px;font-size:13px;}
   .final-score{font-size:16px;font-weight:800;color:var(--text);background:var(--panel-2);border-radius:14px;padding:12px 16px;text-align:center;}
+  .suggestions-box{margin-top:10px;padding:12px 16px;border-radius:14px;background:rgba(47,217,160,0.08);border:1px solid var(--green);}
+  .suggestions-box .sg-title{font-size:12px;font-weight:800;color:var(--green);margin-bottom:8px;}
+  .suggestions-box .sg-words{display:flex;gap:8px;flex-wrap:wrap;}
+  .suggestions-box .sg-word{padding:8px 14px;border-radius:999px;background:var(--panel-2);border:2px solid var(--green);font-weight:800;font-size:14px;cursor:pointer;}
+  .suggestions-box .sg-word:hover{background:var(--green);color:#04241a;}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:2px solid var(--orange);border-radius:999px;padding:11px 20px;font-size:13px;font-weight:700;color:var(--text);z-index:50;opacity:0;transition:opacity .3s ease;pointer-events:none;}
   .toast.show{opacity:1;}
 </style>
@@ -175,6 +190,11 @@
       <h3 style="margin-bottom:14px;">싱글플레이 — AI와 대결</h3>
       <p class="muted" style="margin-bottom:14px;">난이도 0(입문)부터 10(살벌한 상대)까지 — AI 판정은 서버에서 처리돼요</p>
       <button class="btn c-orange block" onclick="goSingleSetup()">AI와 시작하기</button>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:14px;">🏆 랭킹</h3>
+      <p class="muted" style="margin-bottom:14px;">누가 가장 높은 난이도에서 AI를 이겼는지 확인해보세요</p>
+      <button class="btn c-yellow block" onclick="goLeaderboard()">랭킹 보기</button>
     </div>
     <div class="card">
       <h3 style="margin-bottom:14px;">멀티플레이 — 2~8인</h3>
@@ -206,6 +226,9 @@
       <label style="margin-top:14px;">플레이어 이름</label>
       <input type="text" id="single-name" placeholder="닉네임" value="Becca">
       <label style="margin-top:14px;"><input type="checkbox" id="single-dueum" style="width:auto;margin-right:6px;"> 두음법칙 허용 (예: '력'으로 끝나면 '역'으로 시작하는 단어도 인정)</label>
+      <p class="muted" style="margin-top:16px;margin-bottom:6px;">🎯 핸디캡 (켜면 더 어려워져요)</p>
+      <label><input type="checkbox" id="single-handicap-three" style="width:auto;margin-right:6px;"> 3글자 단어만 인정</label>
+      <label style="margin-top:6px;"><input type="checkbox" id="single-handicap-loan" style="width:auto;margin-right:6px;"> 외래어 금지</label>
       <button class="btn c-orange block" style="margin-top:16px;" onclick="startSingle()">게임 시작</button>
     </div>
   </div>
@@ -238,7 +261,8 @@
       </div>
       <div class="row" id="sg-endgame-row" style="display:none;margin-top:10px;flex-direction:column;">
         <div class="final-score" id="sg-final-score">최종 점수: 내 0 · AI 0</div>
-        <div class="row" style="margin-top:8px;">
+        <div id="sg-suggestions" class="suggestions-box hidden"></div>
+        <div class="row" style="margin-top:8px;justify-content:center;">
           <button class="btn c-yellow" id="sg-endgame-primary-btn" onclick="handleEndgamePrimary()">다시 시작하기</button>
           <button class="btn c-gray-o" onclick="goHome()">그만하기</button>
         </div>
@@ -259,6 +283,9 @@
       </div>
       <label style="margin-top:14px;"><input type="checkbox" id="create-team" style="width:auto;margin-right:6px;"> 팀전 (A/B 2팀)</label>
       <label style="margin-top:10px;"><input type="checkbox" id="create-dueum" style="width:auto;margin-right:6px;"> 두음법칙 허용</label>
+      <p class="muted" style="margin-top:16px;margin-bottom:6px;">🎯 핸디캡 (켜면 더 어려워져요)</p>
+      <label><input type="checkbox" id="create-handicap-three" style="width:auto;margin-right:6px;"> 3글자 단어만 인정</label>
+      <label style="margin-top:6px;"><input type="checkbox" id="create-handicap-loan" style="width:auto;margin-right:6px;"> 외래어 금지</label>
       <button class="btn c-blue block" style="margin-top:16px;" onclick="doCreateRoom()">방 생성</button>
     </div>
   </div>
@@ -306,6 +333,19 @@
       </div>
     </div>
   </div>
+
+  <div id="screen-leaderboard" class="hidden">
+    <a class="back" onclick="goHome()">← 나가기</a>
+    <div class="card" style="margin-top:14px;">
+      <h3 style="margin-bottom:14px;">🏆 랭킹 TOP 20</h3>
+      <div class="row" style="margin-bottom:14px;">
+        <button class="btn c-orange" id="lb-tab-fastest" onclick="switchLeaderboard('fastest')">⚡ 최단 레벨업</button>
+        <button class="btn c-gray-o" id="lb-tab-longest" onclick="switchLeaderboard('longest')">🔗 최대 단어 단계</button>
+      </div>
+      <p class="muted" id="lb-desc" style="margin-bottom:16px;">AI를 이긴 기록 중 난이도 높은 순 → 적은 턴수로 빠르게 이긴 순</p>
+      <div id="leaderboard-list"></div>
+    </div>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -341,6 +381,57 @@ function emitAck(event, payload){
 /* ================= 화면 전환 ================= */
 function hideAll(){ document.querySelectorAll('[id^="screen-"]').forEach(el=>el.classList.add('hidden')); }
 function goHome(){ stopMyTurnTimer(); stopSingleCountdown(); hideAll(); document.getElementById('screen-home').classList.remove('hidden'); }
+
+let lbCurrentMode = 'fastest';
+
+async function goLeaderboard(){
+  hideAll();
+  document.getElementById('screen-leaderboard').classList.remove('hidden');
+  await switchLeaderboard('fastest');
+}
+
+async function switchLeaderboard(mode){
+  lbCurrentMode = mode;
+  document.getElementById('lb-tab-fastest').className = 'btn ' + (mode==='fastest' ? 'c-orange' : 'c-gray-o');
+  document.getElementById('lb-tab-longest').className = 'btn ' + (mode==='longest' ? 'c-orange' : 'c-gray-o');
+  document.getElementById('lb-desc').textContent = mode==='fastest'
+    ? 'AI를 이긴 기록 중 난이도 높은 순 → 적은 턴수로 빠르게 이긴 순'
+    : '승패 상관없이 한 게임에서 이어간 단어 수가 가장 많은 순';
+
+  const listEl = document.getElementById('leaderboard-list');
+  listEl.innerHTML = '<div class="lb-empty">불러오는 중...</div>';
+  const res = await emitAck('leaderboard:get', { mode });
+  if(!res.ok || !res.entries.length){
+    listEl.innerHTML = `<div class="lb-empty">${mode==='fastest' ? '아직 이긴 기록이 없어요 — 첫 번째로 AI를 이겨보세요!' : '아직 기록이 없어요 — 게임을 플레이해보세요!'}</div>`;
+    return;
+  }
+  listEl.innerHTML = '';
+  res.entries.forEach((e, i)=>{
+    const div = document.createElement('div');
+    div.className = 'lb-row';
+    const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1);
+    const totalWords = e.myScore + e.aiScore;
+    const meta = mode==='fastest'
+      ? `난이도 ${e.level} · ${totalWords}턴만에 클리어 · ${e.allowDueum ? '두음법칙 허용':'두음법칙 미적용'}`
+      : `난이도 ${e.level} · ${e.won ? '승리':'패배'} · ${e.allowDueum ? '두음법칙 허용':'두음법칙 미적용'}`;
+    const scoreLabel = mode==='fastest' ? `${e.myScore} : ${e.aiScore}` : `${totalWords}단어`;
+    div.innerHTML = `
+      <div class="lb-rank">${medal}</div>
+      <div class="lb-info">
+        <div class="lb-name">${escapeHtml(e.name)}</div>
+        <div class="lb-meta">${meta}</div>
+      </div>
+      <div class="lb-score">${scoreLabel}</div>
+    `;
+    listEl.appendChild(div);
+  });
+}
+
+function escapeHtml(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
 document.querySelector('.brand').addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') goHome(); });
 function goSingleSetup(){ hideAll(); document.getElementById('screen-single-setup').classList.remove('hidden'); renderDiffGrid(); }
 function goCreateRoom(){ hideAll(); document.getElementById('screen-create').classList.remove('hidden'); }
@@ -359,6 +450,7 @@ let sgLevel = 5;
 let sgGameId = null;
 let sgName = '';
 let sgAllowDueum = false;
+let sgHandicap = { threeOnly: false, noLoanwords: false };
 let sgShareCode = null;
 let sgGaugeMax = 100;
 let sgMyScore = 0;
@@ -385,13 +477,18 @@ function renderDiffGrid(){
 async function startSingle(){
   sgName = document.getElementById('single-name').value.trim() || '플레이어';
   sgAllowDueum = document.getElementById('single-dueum').checked;
-  await startSingleWithLevel(sgLevel, sgAllowDueum);
+  sgHandicap = {
+    threeOnly: document.getElementById('single-handicap-three').checked,
+    noLoanwords: document.getElementById('single-handicap-loan').checked,
+  };
+  await startSingleWithLevel(sgLevel, sgAllowDueum, sgHandicap);
 }
 
-async function startSingleWithLevel(level, allowDueum){
+async function startSingleWithLevel(level, allowDueum, handicap){
   sgLevel = level;
   sgAllowDueum = allowDueum;
-  const res = await emitAck('single:start', { name: sgName, level: sgLevel, allowDueum: sgAllowDueum });
+  sgHandicap = handicap || sgHandicap;
+  const res = await emitAck('single:start', { name: sgName, level: sgLevel, allowDueum: sgAllowDueum, handicap: sgHandicap });
   sgGameId = res.gameId;
   sgShareCode = res.shareCode;
   document.getElementById('sg-invite-box').classList.add('hidden');
@@ -402,7 +499,7 @@ async function startSingleWithLevel(level, allowDueum){
   document.getElementById('sg-chain').innerHTML = '';
   document.getElementById('sg-score').innerHTML = '내 점수 0 <span class="hero-score-sep">·</span> AI 0';
   sgMyScore = 0; sgAiScore = 0;
-  document.getElementById('sg-rule-hint').textContent = `표준어만 · 두음법칙 ${res.allowDueum ? '허용':'미적용'} · 2~6글자 · 중복 불가`;
+  document.getElementById('sg-rule-hint').textContent = buildRuleHintText(res.allowDueum, res.handicap);
   updateGauge(res.gauge);
   setSingleStatus('시작 단어를 입력하세요 (2글자 이상)', '');
   document.getElementById('sg-endgame-row').style.display = 'none';
@@ -418,8 +515,15 @@ async function startSingleWithLevel(level, allowDueum){
   input.onkeydown = (e)=>{ if(e.key==='Enter') submitSingle(); };
 }
 
+let sgLastValidGauge = 100;
 function updateGauge(value){
-  const pct = Math.max(0, Math.min(100, value));
+  const num = Number(value);
+  if(!Number.isFinite(num)){
+    console.warn('[gauge] 잘못된 게이지 값 수신, 이전 값 유지:', value);
+    return; // 이전 표시값을 그대로 유지 — 절대 NaN%을 화면에 띄우지 않는다
+  }
+  const pct = Math.max(0, Math.min(100, num));
+  sgLastValidGauge = pct;
   const fill = document.getElementById('sg-gauge-fill');
   fill.style.width = pct + '%';
   fill.classList.toggle('low', pct <= 40);
@@ -464,6 +568,13 @@ function naverDictUrl(word){
 }
 function openDict(word){
   window.open(naverDictUrl(word), '_blank', 'noopener');
+}
+
+function buildRuleHintText(allowDueum, handicap){
+  let text = `표준어만 · 두음법칙 ${allowDueum ? '허용':'미적용'} · 2~6글자 · 중복 불가`;
+  if(handicap && handicap.threeOnly) text += ' · 3글자만';
+  if(handicap && handicap.noLoanwords) text += ' · 외래어 금지';
+  return text;
 }
 
 function showToast(msg){
@@ -533,11 +644,11 @@ async function copyToClipboard(text){
 
 async function levelUpAndRestart(){
   const nextLevel = Math.min(10, sgLevel + 1);
-  await startSingleWithLevel(nextLevel, sgAllowDueum);
+  await startSingleWithLevel(nextLevel, sgAllowDueum, sgHandicap);
 }
 
 async function restartSameLevel(){
-  await startSingleWithLevel(sgLevel, sgAllowDueum);
+  await startSingleWithLevel(sgLevel, sgAllowDueum, sgHandicap);
 }
 
 function handleEndgamePrimary(){
@@ -568,7 +679,23 @@ function renderSingleChain(chain){
 
 let sgLastWon = false;
 
-function endSingleGame(won){
+function renderSuggestions(words){
+  const box = document.getElementById('sg-suggestions');
+  if(!words || !words.length){
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <div class="sg-title">💡 그 순간 이렇게 이어갈 수 있었어요</div>
+    <div class="sg-words">
+      ${words.map(w => `<span class="sg-word" onclick="openDict('${w.replace(/'/g,"\\'")}')" title="네이버 국어사전에서 보기">${w} 🔍</span>`).join('')}
+    </div>
+  `;
+}
+
+function endSingleGame(won, suggestions){
   const input = document.getElementById('sg-input');
   const btn = document.querySelector('#screen-single-game .btn.c-orange');
   const row = document.querySelector('#screen-single-game .row');
@@ -579,6 +706,7 @@ function endSingleGame(won){
   row.style.display = 'none';
 
   document.getElementById('sg-final-score').textContent = `최종 점수 — 내 ${sgMyScore} · AI ${sgAiScore}`;
+  renderSuggestions(won ? null : suggestions);
   const primaryBtn = document.getElementById('sg-endgame-primary-btn');
   if(won){
     primaryBtn.textContent = `다음 레벨로 (난이도 ${Math.min(10, sgLevel + 1)})`;
@@ -625,12 +753,12 @@ async function submitSingle(){
 }
 
 // 서버가 15초 턴 제한 초과를 감지해서 보내는 이벤트 — 게이지가 깎이고, 0이 되면 게임 종료
-socket.on('single:timeout', ({ gauge, finished, winner })=>{
+socket.on('single:timeout', ({ gauge, finished, winner, suggestions })=>{
   if(sgGameId === null) return;
   updateGauge(gauge);
   if(finished){
     setSingleStatus('시간 초과가 계속돼서 생명 게이지가 다 떨어졌어요. AI 승리', 'err');
-    endSingleGame(false);
+    endSingleGame(false, suggestions);
   } else {
     showToast('시간 초과! 생명 게이지가 줄었어요');
     startSingleCountdown(); // 게임은 계속되니 다음 15초 다시 카운트다운
@@ -671,7 +799,11 @@ async function doCreateRoom(){
   const timeLimit = Math.min(60, Math.max(5, parseInt(document.getElementById('create-timer').value)||20));
   const teamMode = document.getElementById('create-team').checked;
   const allowDueum = document.getElementById('create-dueum').checked;
-  const res = await emitAck('room:create', { name: myName, maxPlayers, timeLimit, teamMode, allowDueum });
+  const handicap = {
+    threeOnly: document.getElementById('create-handicap-three').checked,
+    noLoanwords: document.getElementById('create-handicap-loan').checked,
+  };
+  const res = await emitAck('room:create', { name: myName, maxPlayers, timeLimit, teamMode, allowDueum, handicap });
   if(!res.ok){ alert(res.reason || '방 생성에 실패했어요.'); return; }
   myRoomCode = res.room.code;
   currentRoom = res.room;
@@ -733,7 +865,7 @@ function playerName(room, id){ const p = room.players.find(p=>p.id===id); return
 function renderMultiGame(room){
   hideAll();
   document.getElementById('screen-multi-game').classList.remove('hidden');
-  document.getElementById('mg-rule-hint').textContent = `표준어만 · 두음법칙 ${room.allowDueum ? '허용':'미적용'} · 2~6글자 · 중복 불가`;
+  document.getElementById('mg-rule-hint').textContent = buildRuleHintText(room.allowDueum, room.handicap);
 
   const scorebar = document.getElementById('mg-scorebar');
   if(room.teamMode){
