@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>끝말잇기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0C10;
+    --panel:#15171D;
+    --panel-2:#1D2028;
+    --line:rgba(255,255,255,0.10);
+    --text:#F2EFE9;
+    --text-dim:#9B9A93;
+    --orange:#FF7A45;
+    --blue:#5B8CFF;
+    --purple:#B983FF;
+    --yellow:#FFD23F;
+    --pink:#FF7FA8;
+    --green:#2FD9A0;
+    --danger:#FF5A5F;
+    --ok:#2FD9A0;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Noto Sans KR', sans-serif;min-height:100vh;}
+  .wrap{max-width:640px;margin:0 auto;padding:32px 20px 80px;}
+  h1,h2,h3{font-family:'Noto Sans KR', sans-serif; font-weight:900; margin:0; letter-spacing:-0.5px;}
+  .brand{display:flex;align-items:center;gap:14px;margin-bottom:8px;cursor:pointer;user-select:none;transition:opacity .15s;}
+  .brand:hover{opacity:.85;}
+  .brand-mark{width:42px;height:42px;border-radius:50%;background:conic-gradient(from 180deg, var(--orange), var(--pink), var(--purple), var(--blue), var(--yellow), var(--orange));flex:none;}
+  .brand-text{display:flex;flex-direction:column;gap:2px;}
+  .brand-sub{font-size:12px;font-weight:700;color:var(--text-dim);letter-spacing:1px;}
+  .brand-main{
+    font-family:'Noto Sans KR', sans-serif;
+    font-size:34px;
+    font-weight:900;
+    letter-spacing:-1.2px;
+    line-height:1;
+    background:linear-gradient(90deg, var(--orange), var(--pink) 45%, var(--purple) 80%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+    color:transparent;
+  }
+  .tagline{color:var(--text-dim);font-size:13px;margin-bottom:12px;font-weight:500;}
+  .conn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);margin-bottom:24px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--danger);}
+  .dot.on{background:var(--ok);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:16px;}
+  .btn{appearance:none;border:2px solid transparent;background:var(--panel-2);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:15px;font-weight:800;padding:13px 22px;border-radius:999px;cursor:pointer;transition:transform .12s, filter .12s;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn:active{transform:scale(0.97);}
+  .btn.block{width:100%;text-align:center;}
+  .btn:disabled{opacity:.35;cursor:not-allowed;filter:none;}
+  /* 색상 변형 — 채워진 필과 아웃라인 필을 섞어서 참고 이미지 톤을 낸다 */
+  .btn.c-orange, .btn.primary{background:var(--orange);color:#20100a;border-color:var(--orange);}
+  .btn.c-blue{background:var(--blue);color:#0a1330;border-color:var(--blue);}
+  .btn.c-yellow{background:var(--yellow);color:#241900;border-color:var(--yellow);}
+  .btn.c-pink{background:var(--pink);color:#2b0714;border-color:var(--pink);}
+  .btn.c-green{background:var(--green);color:#04241a;border-color:var(--green);}
+  .btn.c-purple-o{background:transparent;color:var(--purple);border-color:var(--purple);}
+  .btn.c-green-o{background:transparent;color:var(--green);border-color:var(--green);}
+  .btn.c-gray-o{background:transparent;color:var(--text-dim);border-color:#4a4a52;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  input[type=text], input[type=number]{background:#0F1116;border:2px solid var(--line);color:var(--text);border-radius:14px;padding:12px 16px;font-size:15px;font-family:inherit;font-weight:500;width:100%;}
+  input[type=text]:focus, input[type=number]:focus{outline:none;border-color:var(--orange);}
+  label{font-size:13px;color:var(--text-dim);display:block;margin-bottom:6px;font-weight:500;}
+  .muted{color:var(--text-dim);font-size:13px;}
+  .hidden{display:none !important;}
+  .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);}
+  .diff-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:14px 0;}
+  .diff-btn{aspect-ratio:1;border-radius:999px;border:2px solid transparent;color:#fff;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .15s, transform .15s;}
+  .diff-btn.active{opacity:1;border-color:#fff;transform:scale(1.08);}
+  .chain{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;max-height:240px;overflow-y:auto;padding:2px;}
+  .bead{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:800;border:2px solid transparent;cursor:pointer;transition:transform .12s, filter .12s;}
+  .bead:hover{transform:translateY(-2px) scale(1.03);filter:brightness(1.1);}
+  .bead:active{transform:translateY(0) scale(0.98);}
+  .bead .who{font-size:10px;font-weight:700;opacity:.75;}
+  .bead.me{background:var(--bead-color, var(--orange));color:#181008;}
+  .bead.ai{background:transparent;border-color:var(--bead-color, var(--purple));color:var(--text);}
+  .timerbar{height:10px;background:var(--panel-2);border-radius:6px;overflow:hidden;margin-bottom:12px;}
+  .timerbar-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--pink));width:100%;transition:width .2s linear;}
+  .timer-row{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+  .timer-row .timerbar{flex:1;margin-bottom:0;}
+  .timer-num{flex:none;min-width:34px;text-align:center;font-size:18px;font-weight:900;color:var(--text);background:var(--panel-2);border-radius:999px;padding:4px 10px;transition:color .15s, background .15s;}
+  .timer-num.urgent{animation:urgentPulseText .28s steps(2, jump-none) infinite; background:rgba(255,90,95,.18);}
+  @keyframes urgentFlash{
+    0%, 100%{background:var(--danger); box-shadow:0 0 14px 3px rgba(255,90,95,1);}
+    50%{background:#FFEA00; box-shadow:0 0 22px 5px rgba(255,234,0,1);}
+  }
+  .timerbar-fill.urgent{animation:urgentFlash .28s steps(2, jump-none) infinite;}
+  @keyframes urgentPulseText{
+    0%, 100%{color:var(--danger); transform:scale(1);}
+    50%{color:#FFEA00; transform:scale(1.12);}
+  }
+  .status.urgent{animation:urgentPulseText .28s steps(2, jump-none) infinite; font-weight:900;}
+  @keyframes urgentShake{
+    0%, 100%{transform:translateX(0);}
+    25%{transform:translateX(-3px);}
+    75%{transform:translateX(3px);}
+  }
+  .timerbar.urgent-shake{animation:urgentShake .1s linear infinite;}
+  .status{font-size:14px;color:var(--text-dim);margin-bottom:10px;min-height:20px;font-weight:500;text-align:center;}
+  .status.err{color:var(--danger);}
+  .status.ok{color:var(--green);}
+  .scorebar{display:flex;justify-content:space-between;font-size:13px;color:var(--text-dim);margin-bottom:10px;font-weight:700;}
+  .hero-score{
+    font-size:32px;
+    font-weight:900;
+    text-align:center;
+    color:var(--text);
+    letter-spacing:-0.5px;
+    margin:6px 0 4px;
+  }
+  .hero-score-sep{color:var(--text-dim);font-weight:700;margin:0 4px;}
+  .level-tag{text-align:center;font-size:12px;color:var(--text-dim);font-weight:700;margin-bottom:14px;}
+  .hero-score-row{
+    display:flex;
+    justify-content:center;
+    align-items:baseline;
+    flex-wrap:wrap;
+    gap:14px;
+    font-size:26px;
+    font-weight:900;
+    margin:6px 0 14px;
+    text-align:center;
+  }
+  .players{display:flex;flex-direction:column;gap:8px;margin:14px 0;}
+  .player{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-radius:999px;background:var(--panel-2);border:2px solid transparent;font-size:14px;font-weight:600;}
+  .player.turn{border-color:var(--orange);}
+  .player .tag{font-size:11px;color:var(--text-dim);}
+  .team-a{color:var(--blue);}
+  .team-b{color:var(--pink);}
+  .code-display{font-family:'Noto Sans KR',monospace;font-weight:900;font-size:28px;letter-spacing:4px;text-align:center;padding:16px;background:var(--panel-2);border-radius:16px;margin:12px 0;border:2px dashed var(--purple);color:var(--purple);}
+  a.back{color:var(--text-dim);font-size:13px;text-decoration:none;cursor:pointer;font-weight:600;}
+  a.back:hover{color:var(--text);}
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;}
+  .rules-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;}
+  .rules-list li{font-size:13px;color:var(--text-dim);line-height:1.5;font-weight:500;}
+  .rules-list li b{color:var(--text);font-weight:800;}
+  .rule-hint{font-size:11px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:7px 12px;margin-bottom:14px;text-align:center;letter-spacing:0.2px;font-weight:700;}
+  .gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .gauge-label{font-size:11px;color:var(--text-dim);flex:none;white-space:nowrap;font-weight:700;}
+  .gaugebar{flex:1;height:10px;background:var(--panel-2);border-radius:999px;overflow:hidden;}
+  .gaugebar-fill{height:100%;width:100%;background:linear-gradient(90deg,var(--green),var(--yellow));transition:width .3s ease, background .3s ease;border-radius:999px;}
+  .gaugebar-fill.low{background:linear-gradient(90deg,var(--danger),var(--orange));}
+  .gauge-pct{font-size:11px;color:var(--text-dim);flex:none;width:34px;text-align:right;font-weight:700;}
+  .friend-btn{width:100%;margin-bottom:14px;}
+  .invite-box{display:flex;gap:8px;margin-bottom:14px;}
+  .invite-box input{background:#0F1116;border:2px solid var(--pink);color:var(--text);border-radius:14px;padding:10px 14px;font-size:12px;font-family:inherit;flex:1;min-width:0;}
+  .invite-box .btn{flex:none;padding:10px 16px;font-size:13px;}
+  .final-score{font-size:16px;font-weight:800;color:var(--text);background:var(--panel-2);border-radius:14px;padding:12px 16px;text-align:center;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:2px solid var(--orange);border-radius:999px;padding:11px 20px;font-size:13px;font-weight:700;color:var(--text);z-index:50;opacity:0;transition:opacity .3s ease;pointer-events:none;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand" onclick="goHome()" role="button" tabindex="0" title="첫 화면으로">
+    <div class="brand-mark"></div>
+    <div class="brand-text">
+      <div class="brand-sub">전복 끝말잇기</div>
+      <div class="brand-main">ITDAWORD</div>
+    </div>
+  </div>
+  <div class="tagline">자개처럼 이어지는 단어 — 마지막 음절이 다음 단어의 첫 음절이 됩니다</div>
+  <div class="conn"><span class="dot" id="conn-dot"></span><span id="conn-text">서버 연결 중...</span></div>
+
+  <div id="screen-home">
+    <div class="card">
+      <h3 style="margin-bottom:14px;">싱글플레이 — AI와 대결</h3>
+      <p class="muted" style="margin-bottom:14px;">난이도 0(입문)부터 10(살벌한 상대)까지 — AI 판정은 서버에서 처리돼요</p>
+      <button class="btn c-orange block" onclick="goSingleSetup()">AI와 시작하기</button>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:14px;">멀티플레이 — 2~8인</h3>
+      <p class="muted" style="margin-bottom:14px;">코드로 초대하거나 랜덤 매칭, 팀전도 가능 — 서버가 턴/시간을 관리해요</p>
+      <div class="row">
+        <button class="btn c-blue" onclick="goCreateRoom()">방 만들기</button>
+        <button class="btn c-purple-o" onclick="goJoinRoom()">코드로 참가</button>
+        <button class="btn c-yellow" onclick="quickMatch()">빠른 대전(랜덤)</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:14px;">게임 규칙</h3>
+      <ul class="rules-list">
+        <li><b>표준국어대사전</b>에 실제로 등재된 단어만 인정돼요 — 최신 줄임말·신조어는 사용할 수 없어요</li>
+        <li><b>두음법칙은 선택사항</b>이에요 — 방 만들기/싱글플레이 시작 화면에서 켜고 끌 수 있어요. 끄면 이전 단어의 마지막 글자와 <b>정확히 같은 글자</b>로만 이어져야 해요 (예: '노력' 다음엔 '력'으로 시작하는 단어만, '역사'는 안 됨)</li>
+        <li>이미 사용한 단어는 다시 쓸 수 없어요</li>
+        <li>두 글자 이상 여섯 글자 이하 단어만 가능해요</li>
+        <li>띄어쓰기 없이 붙여서 입력해 주세요</li>
+      </ul>
+    </div>
+  </div>
+
+  <div id="screen-single-setup" class="hidden">
+    <a class="back" onclick="goHome()">← 뒤로</a>
+    <div class="card" style="margin-top:14px;">
+      <h3>난이도 선택</h3>
+      <div class="diff-grid" id="diff-grid"></div>
+      <p class="muted" id="diff-desc"></p>
+      <label style="margin-top:14px;">플레이어 이름</label>
+      <input type="text" id="single-name" placeholder="닉네임" value="Becca">
+      <label style="margin-top:14px;"><input type="checkbox" id="single-dueum" style="width:auto;margin-right:6px;"> 두음법칙 허용 (예: '력'으로 끝나면 '역'으로 시작하는 단어도 인정)</label>
+      <button class="btn c-orange block" style="margin-top:16px;" onclick="startSingle()">게임 시작</button>
+    </div>
+  </div>
+
+  <div id="screen-single-game" class="hidden">
+    <a class="back" onclick="goHome()">← 나가기</a>
+    <div class="card" style="margin-top:14px;">
+      <div class="rule-hint" id="sg-rule-hint">표준어만 · 두음법칙 미적용 · 2~6글자 · 중복 불가</div>
+      <div class="hero-score" id="sg-score">내 점수 0 <span class="hero-score-sep">·</span> AI 0</div>
+      <div class="level-tag" id="sg-level">난이도 0</div>
+      <div class="gauge-row">
+        <span class="gauge-label">생명 게이지</span>
+        <div class="gaugebar"><div class="gaugebar-fill" id="sg-gauge-fill"></div></div>
+        <span class="gauge-pct" id="sg-gauge-pct">100%</span>
+      </div>
+      <button class="btn c-pink friend-btn" onclick="shareInvite()">🎁 친구 초대하고 게이지 채우기</button>
+      <div class="invite-box hidden" id="sg-invite-box">
+        <input type="text" id="sg-invite-input" readonly onclick="this.select()">
+        <button class="btn c-yellow" onclick="copyInviteLink()">복사</button>
+      </div>
+      <div class="timer-row">
+        <div class="timerbar" id="sg-timerbar"><div class="timerbar-fill" id="sg-timerfill"></div></div>
+        <div class="timer-num" id="sg-timer-num">15</div>
+      </div>
+      <div class="chain" id="sg-chain"></div>
+      <div class="status" id="sg-status">시작 단어를 입력하세요 (2글자 이상)</div>
+      <div class="row">
+        <input type="text" id="sg-input" placeholder="단어 입력">
+        <button class="btn c-orange" onclick="submitSingle()">입력</button>
+      </div>
+      <div class="row" id="sg-endgame-row" style="display:none;margin-top:10px;flex-direction:column;">
+        <div class="final-score" id="sg-final-score">최종 점수: 내 0 · AI 0</div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn c-yellow" id="sg-endgame-primary-btn" onclick="handleEndgamePrimary()">다시 시작하기</button>
+          <button class="btn c-gray-o" onclick="goHome()">그만하기</button>
+        </div>
+        <button class="btn c-pink block" style="margin-top:8px;" onclick="shareResult()">📤 친구에게 내 점수 공유하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-create" class="hidden">
+    <a class="back" onclick="goHome()">← 뒤로</a>
+    <div class="card" style="margin-top:14px;">
+      <h3>방 만들기</h3>
+      <label style="margin-top:14px;">닉네임</label>
+      <input type="text" id="create-name" placeholder="닉네임" value="Becca">
+      <div class="grid2" style="margin-top:14px;">
+        <div><label>최대 인원 (2~8)</label><input type="number" id="create-max" min="2" max="8" value="4"></div>
+        <div><label>턴 제한시간(초)</label><input type="number" id="create-timer" min="5" max="60" value="20"></div>
+      </div>
+      <label style="margin-top:14px;"><input type="checkbox" id="create-team" style="width:auto;margin-right:6px;"> 팀전 (A/B 2팀)</label>
+      <label style="margin-top:10px;"><input type="checkbox" id="create-dueum" style="width:auto;margin-right:6px;"> 두음법칙 허용</label>
+      <button class="btn c-blue block" style="margin-top:16px;" onclick="doCreateRoom()">방 생성</button>
+    </div>
+  </div>
+
+  <div id="screen-join" class="hidden">
+    <a class="back" onclick="goHome()">← 뒤로</a>
+    <div class="card" style="margin-top:14px;">
+      <h3>코드로 참가</h3>
+      <label style="margin-top:14px;">닉네임</label>
+      <input type="text" id="join-name" placeholder="닉네임" value="Becca">
+      <label style="margin-top:14px;">방 코드</label>
+      <input type="text" id="join-code" placeholder="예: AB12CD" style="text-transform:uppercase;">
+      <button class="btn c-purple-o block" style="margin-top:16px;" onclick="doJoinRoom()">참가하기</button>
+      <div class="status" id="join-status"></div>
+    </div>
+  </div>
+
+  <div id="screen-lobby" class="hidden">
+    <a class="back" onclick="leaveRoom()">← 나가기</a>
+    <div class="card" style="margin-top:14px;">
+      <h3>대기실</h3>
+      <div class="code-display" id="lobby-code">------</div>
+      <p class="muted" style="text-align:center;">이 코드를 공유해서 초대하세요</p>
+      <div class="players" id="lobby-players"></div>
+      <p class="muted" id="lobby-info"></p>
+      <button class="btn c-green block" id="lobby-start-btn" onclick="startMultiGame()">게임 시작 (방장)</button>
+    </div>
+  </div>
+
+  <div id="screen-multi-game" class="hidden">
+    <a class="back" onclick="leaveRoom()">← 나가기</a>
+    <div class="card" style="margin-top:14px;">
+      <div class="rule-hint" id="mg-rule-hint">표준어만 · 두음법칙 미적용 · 2~6글자 · 중복 불가</div>
+      <div class="scorebar hero-score-row" id="mg-scorebar"></div>
+      <div class="timer-row">
+        <div class="timerbar"><div class="timerbar-fill" id="mg-timerfill"></div></div>
+        <div class="timer-num" id="mg-timer-num">--</div>
+      </div>
+      <div class="players" id="mg-players"></div>
+      <div class="chain" id="mg-chain"></div>
+      <div class="status" id="mg-status"></div>
+      <div class="row">
+        <input type="text" id="mg-input" placeholder="단어 입력" disabled>
+        <button class="btn c-orange" id="mg-submit" onclick="submitMulti()" disabled>입력</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+/* ================= 서버 연결 ================= */
+const socket = io();
+let myName = '';
+let myRoomCode = null;
+let currentRoom = null;
+let mySocketId = null;
+
+socket.on('connect', ()=>{
+  mySocketId = socket.id;
+  document.getElementById('conn-dot').classList.add('on');
+  document.getElementById('conn-text').textContent = '서버 연결됨';
+});
+socket.on('disconnect', ()=>{
+  document.getElementById('conn-dot').classList.remove('on');
+  document.getElementById('conn-text').textContent = '서버 연결 끊김 — 재접속 시도 중...';
+});
+socket.on('room:update', (room)=>{
+  currentRoom = room;
+  if(room.code !== myRoomCode) return;
+  if(room.status === 'lobby') renderLobby(room);
+  else renderMultiGame(room);
+});
+
+function emitAck(event, payload){
+  return new Promise((resolve)=> socket.emit(event, payload, resolve));
+}
+
+/* ================= 화면 전환 ================= */
+function hideAll(){ document.querySelectorAll('[id^="screen-"]').forEach(el=>el.classList.add('hidden')); }
+function goHome(){ stopMyTurnTimer(); stopSingleCountdown(); hideAll(); document.getElementById('screen-home').classList.remove('hidden'); }
+document.querySelector('.brand').addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') goHome(); });
+function goSingleSetup(){ hideAll(); document.getElementById('screen-single-setup').classList.remove('hidden'); renderDiffGrid(); }
+function goCreateRoom(){ hideAll(); document.getElementById('screen-create').classList.remove('hidden'); }
+function goJoinRoom(){ hideAll(); document.getElementById('screen-join').classList.remove('hidden'); }
+
+/* ================= 싱글플레이 ================= */
+const DIFF_DESC = {
+  0:"완전 초보 — AI가 랜덤으로 아무 단어나 골라요. 자주 막혀요.",
+  1:"입문 — 가끔 실수해요.", 2:"쉬움 — 좁은 단어장만 사용해요.",
+  3:"보통 하 — 막다른 길은 피하려고 해요.", 4:"보통 — 무난하게 이어가요.",
+  5:"보통 상 — 웬만해선 지지 않아요.", 6:"약간 어려움 — 한 수 앞을 내다봐요.",
+  7:"어려움 — 상대를 막다른 길로 유도해요.", 8:"매우 어려움 — 두 수 앞을 계산해요.",
+  9:"고수 — 희귀 음절을 적극적으로 노려요.", 10:"살벌함 — 세 수 앞까지 계산하는 최적 대응."
+};
+let sgLevel = 5;
+let sgGameId = null;
+let sgName = '';
+let sgAllowDueum = false;
+let sgShareCode = null;
+let sgGaugeMax = 100;
+let sgMyScore = 0;
+let sgAiScore = 0;
+let pendingInviteCode = null; // ?invite=CODE 로 들어왔을 때 소켓 연결되면 처리
+
+// 참고 이미지 톤에 맞춘 팔레트 — 난이도 스펙트럼(차분함→강렬함), 체인 필 순환에 같이 쓴다
+const PILL_PALETTE = ['#2FD9A0','#4FCBB0','#6FBEDD','#5B8CFF','#8B8CFF','#B983FF','#D983D8','#FF7FA8','#FF7A6B','#FF6B4A','#FF5A4D'];
+
+function renderDiffGrid(){
+  const grid = document.getElementById('diff-grid');
+  grid.innerHTML = '';
+  for(let i=0;i<=10;i++){
+    const b = document.createElement('button');
+    b.className = 'diff-btn' + (i===sgLevel ? ' active':'');
+    b.style.background = PILL_PALETTE[i];
+    b.textContent = i;
+    b.onclick = ()=>{ sgLevel = i; renderDiffGrid(); };
+    grid.appendChild(b);
+  }
+  document.getElementById('diff-desc').textContent = DIFF_DESC[sgLevel];
+}
+
+async function startSingle(){
+  sgName = document.getElementById('single-name').value.trim() || '플레이어';
+  sgAllowDueum = document.getElementById('single-dueum').checked;
+  await startSingleWithLevel(sgLevel, sgAllowDueum);
+}
+
+async function startSingleWithLevel(level, allowDueum){
+  sgLevel = level;
+  sgAllowDueum = allowDueum;
+  const res = await emitAck('single:start', { name: sgName, level: sgLevel, allowDueum: sgAllowDueum });
+  sgGameId = res.gameId;
+  sgShareCode = res.shareCode;
+  document.getElementById('sg-invite-box').classList.add('hidden');
+  sgGaugeMax = res.gaugeMax || 100;
+  hideAll();
+  document.getElementById('screen-single-game').classList.remove('hidden');
+  document.getElementById('sg-level').textContent = `난이도 ${res.level}`;
+  document.getElementById('sg-chain').innerHTML = '';
+  document.getElementById('sg-score').innerHTML = '내 점수 0 <span class="hero-score-sep">·</span> AI 0';
+  sgMyScore = 0; sgAiScore = 0;
+  document.getElementById('sg-rule-hint').textContent = `표준어만 · 두음법칙 ${res.allowDueum ? '허용':'미적용'} · 2~6글자 · 중복 불가`;
+  updateGauge(res.gauge);
+  setSingleStatus('시작 단어를 입력하세요 (2글자 이상)', '');
+  document.getElementById('sg-endgame-row').style.display = 'none';
+  startSingleCountdown();
+  const input = document.getElementById('sg-input');
+  const btn = document.querySelector('#screen-single-game .btn.c-orange');
+  const row = document.querySelector('#screen-single-game .row');
+  row.style.display = 'flex';
+  input.value='';
+  input.disabled = false;
+  btn.disabled = false;
+  input.focus();
+  input.onkeydown = (e)=>{ if(e.key==='Enter') submitSingle(); };
+}
+
+function updateGauge(value){
+  const pct = Math.max(0, Math.min(100, value));
+  const fill = document.getElementById('sg-gauge-fill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('low', pct <= 40);
+  document.getElementById('sg-gauge-pct').textContent = pct + '%';
+}
+
+// 싱글플레이 15초 턴 카운트다운 — 서버 판정이 진짜 기준이고, 이건 화면에 긴박함을 보여주기 위한 클라이언트 표시용.
+const SINGLE_TURN_MS = 15000;
+let sgTurnTimerId = null;
+let sgTurnDeadline = null;
+
+function startSingleCountdown(){
+  stopSingleCountdown();
+  sgTurnDeadline = Date.now() + SINGLE_TURN_MS;
+  const bar = document.getElementById('sg-timerbar');
+  const fill = document.getElementById('sg-timerfill');
+  const numEl = document.getElementById('sg-timer-num');
+  sgTurnTimerId = setInterval(()=>{
+    const remain = Math.max(0, sgTurnDeadline - Date.now());
+    const pct = (remain / SINGLE_TURN_MS) * 100;
+    fill.style.width = pct + '%';
+    numEl.textContent = Math.ceil(remain / 1000);
+    const urgent = remain <= 5000;
+    fill.classList.toggle('urgent', urgent);
+    numEl.classList.toggle('urgent', urgent && remain > 0);
+    bar.classList.toggle('urgent-shake', remain <= 3000);
+    document.getElementById('sg-status').classList.toggle('urgent', urgent && remain > 0);
+  }, 100);
+}
+function stopSingleCountdown(){
+  if(sgTurnTimerId){ clearInterval(sgTurnTimerId); sgTurnTimerId=null; }
+  document.getElementById('sg-timerbar').classList.remove('urgent-shake');
+  document.getElementById('sg-timerfill').classList.remove('urgent');
+  document.getElementById('sg-timer-num').classList.remove('urgent');
+  document.getElementById('sg-timer-num').textContent = '15';
+  document.getElementById('sg-status').classList.remove('urgent');
+}
+
+// 단어 칩을 누르면 네이버 국어사전에서 그 단어를 바로 검색해서 보여준다
+function naverDictUrl(word){
+  return `https://ko.dict.naver.com/#/search?query=${encodeURIComponent(word)}`;
+}
+function openDict(word){
+  window.open(naverDictUrl(word), '_blank', 'noopener');
+}
+
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> el.classList.remove('show'), 3000);
+}
+
+function revealShareBox(text){
+  const box = document.getElementById('sg-invite-box');
+  const input = document.getElementById('sg-invite-input');
+  input.value = text;
+  box.classList.remove('hidden');
+  box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  input.focus();
+  input.select();
+  copyInviteLink(true); // 자동으로도 한 번 복사 시도 (실패해도 위 입력창에 링크는 항상 보임)
+}
+
+function shareInvite(){
+  if(!sgShareCode){ showToast('초대 코드를 아직 못 받았어요. 잠시 후 다시 눌러주세요.'); return; }
+  const url = `${location.origin}/?invite=${sgShareCode}`;
+  revealShareBox(url);
+}
+
+function shareResult(){
+  const url = location.origin;
+  const text = `끝말잇기 난이도 ${sgLevel}에서 나 ${sgMyScore} : ${sgAiScore}로 AI랑 겨뤘어! 너도 해볼래? ${url}`;
+  revealShareBox(text);
+}
+
+async function copyInviteLink(silent){
+  const input = document.getElementById('sg-invite-input');
+  const text = input.value;
+  if(!text) return;
+  const ok = await copyToClipboard(text);
+  if(!silent || ok){
+    showToast(ok ? '초대 링크를 복사했어요! 친구에게 보내주세요' : '자동 복사는 안 됐어요 — 위 칸에서 직접 선택해서 복사해주세요');
+  }
+}
+
+// 클립보드 API가 막혀있거나 실패해도 옛날 방식(임시 textarea + execCommand)으로 한 번 더 시도한다.
+async function copyToClipboard(text){
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(e){ /* 아래 폴백으로 넘어감 */ }
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){
+    return false;
+  }
+}
+
+async function levelUpAndRestart(){
+  const nextLevel = Math.min(10, sgLevel + 1);
+  await startSingleWithLevel(nextLevel, sgAllowDueum);
+}
+
+async function restartSameLevel(){
+  await startSingleWithLevel(sgLevel, sgAllowDueum);
+}
+
+function handleEndgamePrimary(){
+  if(sgLastWon) levelUpAndRestart();
+  else restartSameLevel();
+}
+
+function setSingleStatus(msg, cls){
+  const el = document.getElementById('sg-status');
+  el.textContent = msg;
+  el.className = 'status' + (cls ? ' '+cls : '');
+}
+
+function renderSingleChain(chain){
+  const el = document.getElementById('sg-chain');
+  el.innerHTML = '';
+  chain.forEach((item, i)=>{
+    const div = document.createElement('div');
+    div.className = 'bead ' + (item.who==='me' ? 'me':'ai');
+    div.style.setProperty('--bead-color', PILL_PALETTE[i % PILL_PALETTE.length]);
+    div.title = '네이버 국어사전에서 보기';
+    div.onclick = ()=> openDict(item.word);
+    div.innerHTML = `<span>${item.word}</span><span class="who">${item.who==='me' ? sgName : 'AI'} 🔍</span>`;
+    el.appendChild(div);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+let sgLastWon = false;
+
+function endSingleGame(won){
+  const input = document.getElementById('sg-input');
+  const btn = document.querySelector('#screen-single-game .btn.c-orange');
+  const row = document.querySelector('#screen-single-game .row');
+  input.disabled = true;
+  btn.disabled = true;
+  stopSingleCountdown();
+  sgLastWon = won;
+  row.style.display = 'none';
+
+  document.getElementById('sg-final-score').textContent = `최종 점수 — 내 ${sgMyScore} · AI ${sgAiScore}`;
+  const primaryBtn = document.getElementById('sg-endgame-primary-btn');
+  if(won){
+    primaryBtn.textContent = `다음 레벨로 (난이도 ${Math.min(10, sgLevel + 1)})`;
+  } else {
+    primaryBtn.textContent = '다시 시작하시겠습니까?';
+  }
+  document.getElementById('sg-endgame-row').style.display = 'flex';
+}
+
+async function submitSingle(){
+  const input = document.getElementById('sg-input');
+  const word = input.value.trim();
+  if(!word) return;
+  const btn = document.querySelector('#screen-single-game .btn.c-orange');
+  if(btn.disabled) return; // 이미 처리 중이면 무시 (더블클릭/엔터연타 방지)
+  btn.disabled = true;
+  input.disabled = true;
+  setSingleStatus('확인 중...', '');
+  let gameOver = false;
+  try{
+    const res = await emitAck('single:submit', { gameId: sgGameId, word });
+    if(!res.ok){ setSingleStatus(res.reason, 'err'); return; }
+    input.value='';
+    const state = res.state;
+    renderSingleChain(state.chain);
+    document.getElementById('sg-score').innerHTML = `내 점수 ${state.myScore} <span class="hero-score-sep">·</span> AI ${state.aiScore}`;
+    sgMyScore = state.myScore; sgAiScore = state.aiScore;
+    updateGauge(state.gauge);
+    if(res.finished){
+      gameOver = true;
+      const won = res.winner==='me';
+      setSingleStatus(won ? 'AI가 이어갈 단어를 찾지 못했어요! 승리!' : '이어갈 단어가 없어요. AI 승리', won ? 'ok':'err');
+      endSingleGame(won);
+    } else {
+      const last = state.chain[state.chain.length-1];
+      setSingleStatus(`'${last.word}' — 이어서 입력하세요`, 'ok');
+      startSingleCountdown(); // 내 턴이 다시 시작되니 15초 카운트다운 리셋
+    }
+  } finally {
+    btn.disabled = false;
+    input.disabled = gameOver;
+    if(!gameOver) input.focus();
+  }
+}
+
+// 서버가 15초 턴 제한 초과를 감지해서 보내는 이벤트 — 게이지가 깎이고, 0이 되면 게임 종료
+socket.on('single:timeout', ({ gauge, finished, winner })=>{
+  if(sgGameId === null) return;
+  updateGauge(gauge);
+  if(finished){
+    setSingleStatus('시간 초과가 계속돼서 생명 게이지가 다 떨어졌어요. AI 승리', 'err');
+    endSingleGame(false);
+  } else {
+    showToast('시간 초과! 생명 게이지가 줄었어요');
+    startSingleCountdown(); // 게임은 계속되니 다음 15초 다시 카운트다운
+  }
+});
+
+// 친구가 초대 링크로 들어와서 적립됐을 때 실시간으로 반영
+socket.on('single:gaugeUpdate', ({ gauge })=>{
+  updateGauge(gauge);
+  showToast('친구가 참여해서 생명 게이지가 올랐어요! +1%');
+});
+
+// 페이지 로드시 ?invite=코드 로 들어왔으면 소켓 연결 직후 자동으로 적립 시도
+(function checkInviteParam(){
+  const params = new URLSearchParams(location.search);
+  const code = params.get('invite');
+  if(code) pendingInviteCode = code.toUpperCase();
+})();
+socket.on('connect', async ()=>{
+  if(pendingInviteCode){
+    const code = pendingInviteCode;
+    pendingInviteCode = null;
+    const res = await emitAck('friend:redeem', { code });
+    if(res.ok){
+      showToast('친구 참여 보상을 전달했어요! 고마워요 🎉');
+    }
+    // URL을 깨끗하게 정리 (뒤로가기/새로고침 시 중복 시도 방지)
+    const url = new URL(location.href);
+    url.searchParams.delete('invite');
+    history.replaceState({}, '', url.toString());
+  }
+});
+
+/* ================= 멀티플레이 ================= */
+async function doCreateRoom(){
+  myName = document.getElementById('create-name').value.trim() || '방장';
+  const maxPlayers = Math.min(8, Math.max(2, parseInt(document.getElementById('create-max').value)||4));
+  const timeLimit = Math.min(60, Math.max(5, parseInt(document.getElementById('create-timer').value)||20));
+  const teamMode = document.getElementById('create-team').checked;
+  const allowDueum = document.getElementById('create-dueum').checked;
+  const res = await emitAck('room:create', { name: myName, maxPlayers, timeLimit, teamMode, allowDueum });
+  if(!res.ok){ alert(res.reason || '방 생성에 실패했어요.'); return; }
+  myRoomCode = res.room.code;
+  currentRoom = res.room;
+  enterLobby(res.room);
+}
+
+async function doJoinRoom(){
+  myName = document.getElementById('join-name').value.trim() || '플레이어';
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const statusEl = document.getElementById('join-status');
+  if(!code){ statusEl.textContent = '코드를 입력해 주세요.'; return; }
+  const res = await emitAck('room:join', { code, name: myName });
+  if(!res.ok){ statusEl.textContent = res.reason; return; }
+  myRoomCode = res.room.code;
+  currentRoom = res.room;
+  enterLobby(res.room);
+}
+
+async function quickMatch(){
+  myName = 'Guest' + Math.floor(Math.random()*1000);
+  const res = await emitAck('room:quickmatch', { name: myName });
+  if(!res.ok){ alert(res.reason || '매칭에 실패했어요.'); return; }
+  myRoomCode = res.room.code;
+  currentRoom = res.room;
+  enterLobby(res.room);
+}
+
+function enterLobby(room){
+  hideAll();
+  document.getElementById('screen-lobby').classList.remove('hidden');
+  renderLobby(room);
+}
+
+function renderLobby(room){
+  const isHost = room.hostId === mySocketId;
+  document.getElementById('lobby-code').textContent = room.code;
+  const list = document.getElementById('lobby-players');
+  list.innerHTML = '';
+  room.players.forEach(p=>{
+    const div = document.createElement('div');
+    div.className = 'player';
+    const teamLabel = p.team ? `<span class="tag ${p.team==='A'?'team-a':'team-b'}">팀 ${p.team}</span>` : '';
+    div.innerHTML = `<span>${p.name}${p.id===room.hostId?' <span class="pill">방장</span>':''}</span>${teamLabel}`;
+    list.appendChild(div);
+  });
+  document.getElementById('lobby-info').textContent = `${room.players.length}/${room.maxPlayers}명 · 제한시간 ${room.timeLimit}초 · ${room.teamMode?'팀전':'개인전'}`;
+  const startBtn = document.getElementById('lobby-start-btn');
+  startBtn.classList.toggle('hidden', !isHost);
+  startBtn.disabled = room.players.length < 2;
+}
+
+async function startMultiGame(){
+  const res = await emitAck('room:start', { code: myRoomCode });
+  if(!res.ok) alert(res.reason);
+}
+
+function playerName(room, id){ const p = room.players.find(p=>p.id===id); return p ? p.name : '?'; }
+
+function renderMultiGame(room){
+  hideAll();
+  document.getElementById('screen-multi-game').classList.remove('hidden');
+  document.getElementById('mg-rule-hint').textContent = `표준어만 · 두음법칙 ${room.allowDueum ? '허용':'미적용'} · 2~6글자 · 중복 불가`;
+
+  const scorebar = document.getElementById('mg-scorebar');
+  if(room.teamMode){
+    const scoreA = room.players.filter(p=>p.team==='A').reduce((s,p)=>s+(room.scores[p.id]||0),0);
+    const scoreB = room.players.filter(p=>p.team==='B').reduce((s,p)=>s+(room.scores[p.id]||0),0);
+    scorebar.innerHTML = `<span class="team-a">팀 A ${scoreA}</span><span class="team-b">팀 B ${scoreB}</span>`;
+  } else {
+    scorebar.innerHTML = room.players.map(p=>`<span>${p.name} ${room.scores[p.id]||0}</span>`).join('');
+  }
+
+  const playersEl = document.getElementById('mg-players');
+  playersEl.innerHTML = '';
+  const currentId = room.turnOrder.length ? room.turnOrder[room.currentTurn % room.turnOrder.length] : null;
+  room.players.forEach(p=>{
+    const div = document.createElement('div');
+    div.className = 'player' + (p.id===currentId ? ' turn':'');
+    const teamLabel = p.team ? `<span class="tag ${p.team==='A'?'team-a':'team-b'}">팀 ${p.team}</span>` : '';
+    const eliminated = room.status==='playing' && !room.turnOrder.includes(p.id);
+    div.style.opacity = eliminated ? '0.4' : '1';
+    div.innerHTML = `<span>${p.id===mySocketId ? p.name+' (나)' : p.name}${p.id===currentId?' <span class="pill">차례</span>':''}${eliminated?' <span class="pill">탈락</span>':''}</span>${teamLabel}`;
+    playersEl.appendChild(div);
+  });
+
+  const chainEl = document.getElementById('mg-chain');
+  chainEl.innerHTML = '';
+  room.chain.forEach((item, i)=>{
+    const div = document.createElement('div');
+    div.className = 'bead' + (item.playerId===mySocketId ? ' me':' ai');
+    div.style.setProperty('--bead-color', PILL_PALETTE[i % PILL_PALETTE.length]);
+    div.title = '네이버 국어사전에서 보기';
+    div.onclick = ()=> openDict(item.word);
+    div.innerHTML = `<span>${item.word}</span><span class="who">${playerName(room,item.playerId)} 🔍</span>`;
+    chainEl.appendChild(div);
+  });
+  chainEl.scrollTop = chainEl.scrollHeight;
+
+  const statusEl = document.getElementById('mg-status');
+  const input = document.getElementById('mg-input');
+  const submitBtn = document.getElementById('mg-submit');
+
+  if(room.status === 'finished'){
+    statusEl.textContent = room.winner ? `게임 종료 — ${room.winner} 승리!` : '게임 종료';
+    statusEl.className = 'status ok';
+    input.disabled = true; submitBtn.disabled = true;
+    stopMyTurnTimer();
+    return;
+  }
+
+  const myTurn = currentId === mySocketId;
+  input.disabled = !myTurn;
+  submitBtn.disabled = !myTurn;
+
+  if(myTurn){
+    const prev = room.chain.length ? room.chain[room.chain.length-1].word : null;
+    statusEl.textContent = prev ? `'${prev}' 다음으로 이어질 단어를 입력하세요` : '시작 단어를 입력하세요';
+    statusEl.className = 'status';
+    input.focus();
+  } else {
+    statusEl.textContent = currentId ? `${playerName(room,currentId)}님의 차례를 기다리는 중...` : '';
+    statusEl.className = 'status';
+  }
+  startMyTurnTimer(room);
+}
+
+let myTurnTimerId = null;
+function startMyTurnTimer(room){
+  stopMyTurnTimer();
+  myTurnTimerId = setInterval(()=>{
+    if(!currentRoom || currentRoom.status !== 'playing') return;
+    const elapsed = (Date.now() - currentRoom.lastMoveAt)/1000;
+    const remain = Math.max(0, currentRoom.timeLimit - elapsed);
+    const fill = document.getElementById('mg-timerfill');
+    const numEl = document.getElementById('mg-timer-num');
+    fill.style.width = (remain/currentRoom.timeLimit*100)+'%';
+    numEl.textContent = Math.ceil(remain);
+    const urgent = remain <= Math.min(5, currentRoom.timeLimit*0.35);
+    fill.classList.toggle('urgent', urgent);
+    numEl.classList.toggle('urgent', urgent && remain > 0);
+    document.getElementById('mg-status').classList.toggle('urgent', urgent && remain > 0);
+  }, 100);
+}
+function stopMyTurnTimer(){
+  if(myTurnTimerId){ clearInterval(myTurnTimerId); myTurnTimerId=null; }
+  const fill = document.getElementById('mg-timerfill');
+  if(fill) fill.classList.remove('urgent');
+  const numEl = document.getElementById('mg-timer-num');
+  if(numEl) numEl.classList.remove('urgent');
+  const status = document.getElementById('mg-status');
+  if(status) status.classList.remove('urgent');
+}
+
+async function submitMulti(){
+  const input = document.getElementById('mg-input');
+  const word = input.value.trim();
+  if(!word) return;
+  const statusEl = document.getElementById('mg-status');
+  const res = await emitAck('room:submit', { code: myRoomCode, word });
+  if(!res.ok){ statusEl.textContent = res.reason; statusEl.className='status err'; return; }
+  input.value='';
+}
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter' && document.activeElement && document.activeElement.id==='mg-input') submitMulti();
+});
+
+async function leaveRoom(){
+  stopMyTurnTimer();
+  if(myRoomCode){ socket.emit('room:leave', { code: myRoomCode }); }
+  myRoomCode = null;
+  currentRoom = null;
+  goHome();
+}
+</script>
+</body>
+</html>

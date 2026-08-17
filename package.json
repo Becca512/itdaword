@@ -1,0 +1,18 @@
+{
+  "name": "wordchain-server",
+  "version": "0.1.0",
+  "description": "\ub05d\ub9d0\uc787\uae30 \uc2e4\uc2dc\uac04 \ub9e4\uce6d \uc11c\ubc84 (\uc2f1\uae00 AI + \uba40\ud2f0 2~8\uc778, \ud300\uc804, \ucd08\ub300\ucf54\ub4dc, \ub79c\ub364\ub9e4\uce6d)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.5"
+  }
+}
