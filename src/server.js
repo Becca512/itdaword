@@ -32,10 +32,11 @@ function finalizeRankedIfNeeded(room) {
   if (!room.rankedMode || room.status !== 'finished' || room.rankedApplied) return;
   if (!room.winner || !room.rankedParticipants || room.rankedParticipants.length < 2) return;
   room.rankedApplied = true;
-  const other = room.rankedParticipants.find((n) => n !== room.winner);
-  if (!other) return;
-  const result = rm.applyRankedResult(room.winner, other);
-  if (result) io.to(room.code).emit('ranked:result', result);
+  const winnerP = room.rankedParticipants.find((p) => p.name === room.winner);
+  const loserP = room.rankedParticipants.find((p) => p.name !== room.winner);
+  if (!winnerP || !loserP) return;
+  const result = rm.computeRankedResult(winnerP, loserP);
+  io.to(room.code).emit('ranked:result', result);
 }
 
 function scheduleTurnTimer(room) {
@@ -184,19 +185,14 @@ io.on('connection', (socket) => {
     broadcastRoom(result.room);
   });
 
-  socket.on('room:quickmatch', ({ name, ranked }, ack) => {
+  socket.on('room:quickmatch', ({ name, ranked, rating, wins, losses }, ack) => {
     const playerName = name || `Guest${Math.floor(Math.random() * 1000)}`;
     const { room } = ranked
-      ? rm.quickMatchRanked({ socketId: socket.id, name: playerName })
+      ? rm.quickMatchRanked({ socketId: socket.id, name: playerName, rating, wins, losses })
       : rm.quickMatch({ socketId: socket.id, name: playerName });
     socket.join(room.code);
     ack && ack({ ok: true, room: rm.publicRoom(room) });
     broadcastRoom(room);
-  });
-
-  // 랭크전 레이팅/티어 조회 (닉네임 기준)
-  socket.on('rank:get', ({ name }, ack) => {
-    ack && ack({ ok: true, info: rm.getRatingInfo(name) });
   });
 
   socket.on('room:start', ({ code }, ack) => {
@@ -228,11 +224,12 @@ io.on('connection', (socket) => {
 
   socket.on('room:leave', ({ code }) => {
     const room = rm.leaveRoom({ code, socketId: socket.id });
-    socket.leave(code);
+    // 나가는 소켓한테도 결과(패배 시 레이팅 하락)를 전달해야 하므로, 방 채널에서 빠지기 전에 먼저 브로드캐스트한다.
     if (room) {
       broadcastRoom(room);
       finalizeRankedIfNeeded(room);
     }
+    socket.leave(code);
   });
 
   socket.on('disconnect', () => {

@@ -797,6 +797,9 @@ socket.on('ranked:result', (result)=>{
              : result.loser.name === myRankedName ? result.loser
              : null;
   if(!mine) return;
+  // 내 새 레이팅을 이 브라우저에 저장 (서버는 이 값을 기억하지 않으니, 저장은 클라이언트 책임)
+  saveLocalRankInfo({ rating: mine.rating, wins: mine.wins, losses: mine.losses });
+  refreshMyTierBadge();
   const won = mine.delta > 0;
   box.classList.remove('hidden');
   box.className = 'ranked-result-box ' + (won ? 'win' : 'lose');
@@ -869,24 +872,49 @@ async function quickMatch(){
 
 let myRankedName = localStorage.getItem('itdaword_ranked_name') || '';
 
+// 랭킹 점수는 서버가 아니라 이 브라우저에 저장한다 (계정/DB 없이도 다음 방문에 이어짐).
+function getLocalRankInfo(){
+  try{
+    const raw = localStorage.getItem('itdaword_rank_info');
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { rating: 1000, wins: 0, losses: 0 };
+}
+function saveLocalRankInfo(info){
+  localStorage.setItem('itdaword_rank_info', JSON.stringify({
+    rating: info.rating, wins: info.wins, losses: info.losses
+  }));
+}
+function tierNameFor(rating){
+  const tiers = [
+    {name:'브론즈', min:0, color:'#B08D57'},
+    {name:'실버', min:1000, color:'#B9C4CA'},
+    {name:'골드', min:1200, color:'#FFD23F'},
+    {name:'플래티넘', min:1400, color:'#5B8CFF'},
+    {name:'다이아몬드', min:1600, color:'#7FDBFF'},
+    {name:'마스터', min:1800, color:'#B983FF'},
+  ];
+  let t = tiers[0];
+  for(const x of tiers){ if(rating >= x.min) t = x; }
+  return t;
+}
+
 function tierBadgeHtml(info){
   if(!info) return '';
+  const t = tierNameFor(info.rating);
   return `
-    <span class="tier-badge" style="--tier-color:${info.tierColor}">
-      <span class="tier-dot"></span>${info.tier} · ${info.rating}
+    <span class="tier-badge" style="--tier-color:${t.color}">
+      <span class="tier-dot"></span>${t.name} · ${info.rating}
     </span>
     <span class="tier-stats">${info.wins}승 ${info.losses}패</span>
   `;
 }
 
-async function refreshMyTierBadge(){
+function refreshMyTierBadge(){
   const box = document.getElementById('my-tier-badge');
   const nameInput = document.getElementById('ranked-name');
   if(myRankedName) nameInput.value = myRankedName;
-  const name = nameInput.value.trim();
-  if(!name){ box.innerHTML = '<span class="muted" style="font-size:12px;">닉네임을 입력하면 내 티어가 보여요</span>'; return; }
-  const res = await emitAck('rank:get', { name });
-  if(res.ok) box.innerHTML = tierBadgeHtml(res.info);
+  box.innerHTML = tierBadgeHtml(getLocalRankInfo());
 }
 
 async function doRankedQuickmatch(){
@@ -896,7 +924,8 @@ async function doRankedQuickmatch(){
   myRankedName = name;
   localStorage.setItem('itdaword_ranked_name', name);
   myName = name;
-  const res = await emitAck('room:quickmatch', { name, ranked: true });
+  const rankInfo = getLocalRankInfo();
+  const res = await emitAck('room:quickmatch', { name, ranked: true, rating: rankInfo.rating, wins: rankInfo.wins, losses: rankInfo.losses });
   if(!res.ok){ alert(res.reason || '매칭에 실패했어요.'); return; }
   myRoomCode = res.room.code;
   currentRoom = res.room;

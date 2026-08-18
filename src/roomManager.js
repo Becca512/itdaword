@@ -102,9 +102,10 @@ function quickMatch({ socketId, name }) {
 }
 
 // ---------- 랭크전 / 티어 ----------
-// 계정 시스템이 없어서 "닉네임"을 식별자로 레이팅을 저장한다 (같은 닉네임 = 같은 기록 이어짐,
-// 서버 재시작하면 초기화, 다른 사람이 같은 닉네임을 쓰면 섞일 수 있음 — 알려진 한계).
-const ratings = new Map(); // name -> { rating, wins, losses }
+// 계정/DB가 없어서, 레이팅을 서버가 아니라 "각자의 브라우저"에 저장한다.
+// 매칭 시작할 때 클라이언트가 자기 현재 레이팅을 알려주면, 서버는 그 순간의 승부만 계산해서
+// 결과를 돌려주고 잊어버린다 — 결과를 받은 클라이언트가 자기 브라우저에 새 값을 저장한다.
+// (단점: 브라우저 저장값을 직접 조작하면 점수를 속일 수 있음 — 캐주얼 용도로 감수하는 트레이드오프)
 const rankedQueue = [];
 
 const TIERS = [
@@ -124,43 +125,32 @@ function getTier(rating) {
   return tier;
 }
 
-function getRatingInfo(name) {
-  const key = (name || '플레이어').trim().slice(0, 20) || '플레이어';
-  if (!ratings.has(key)) ratings.set(key, { rating: 1000, wins: 0, losses: 0 });
-  const r = ratings.get(key);
-  const tier = getTier(r.rating);
-  return { name: key, rating: r.rating, wins: r.wins, losses: r.losses, tier: tier.name, tierColor: tier.color };
+function tierInfo(name, rating, wins, losses) {
+  const tier = getTier(rating);
+  return { name, rating, wins, losses, tier: tier.name, tierColor: tier.color };
 }
 
 // 간이 ELO: K=32. 승자는 (1-기대승률)*K 만큼 얻고, 패자는 그만큼 잃는다.
-function applyRankedResult(winnerName, loserName) {
-  const wKey = (winnerName || '플레이어').trim().slice(0, 20) || '플레이어';
-  const lKey = (loserName || '플레이어').trim().slice(0, 20) || '플레이어';
-  if (wKey === lKey) return null; // 같은 이름이면(식별 불가) 반영하지 않음
-  if (!ratings.has(wKey)) ratings.set(wKey, { rating: 1000, wins: 0, losses: 0 });
-  if (!ratings.has(lKey)) ratings.set(lKey, { rating: 1000, wins: 0, losses: 0 });
-  const w = ratings.get(wKey);
-  const l = ratings.get(lKey);
+// winner/loser: { name, rating, wins, losses } — 클라이언트가 매칭 시작 시 보내온 값 그대로.
+function computeRankedResult(winner, loser) {
   const K = 32;
-  const expectedW = 1 / (1 + Math.pow(10, (l.rating - w.rating) / 400));
+  const expectedW = 1 / (1 + Math.pow(10, (loser.rating - winner.rating) / 400));
   const delta = Math.max(8, Math.round(K * (1 - expectedW))); // 최소 8점은 오르내리게 (밋밋함 방지)
-  w.rating += delta;
-  l.rating = Math.max(0, l.rating - delta);
-  w.wins += 1;
-  l.losses += 1;
   return {
-    winner: { ...getRatingInfo(wKey), delta },
-    loser: { ...getRatingInfo(lKey), delta: -delta },
+    winner: { ...tierInfo(winner.name, winner.rating + delta, winner.wins + 1, winner.losses), delta },
+    loser: { ...tierInfo(loser.name, Math.max(0, loser.rating - delta), loser.wins, loser.losses + 1), delta: -delta },
   };
 }
 
 // 랭크전 전용 빠른 매칭 — 항상 2인, 핸디캡/두음법칙 없이 공정한 기본 규칙으로 고정.
-function quickMatchRanked({ socketId, name }) {
+// rating/wins/losses는 클라이언트가 자기 브라우저에 저장해둔 값을 보내온 것.
+function quickMatchRanked({ socketId, name, rating, wins, losses }) {
+  const myInfo = { rating: Number(rating) || 1000, wins: Number(wins) || 0, losses: Number(losses) || 0 };
   while (rankedQueue.length) {
     const code = rankedQueue[0];
     const room = rooms.get(code);
     if (room && room.status === 'lobby' && room.players.length < room.maxPlayers) {
-      room.players.push({ id: socketId, name, team: null, connected: true });
+      room.players.push({ id: socketId, name, team: null, connected: true, ...myInfo });
       rankedQueue.shift(); // 랭크전은 항상 2인이라 채워지면 큐에서 바로 뺀다
       return { room, created: false };
     }
@@ -176,6 +166,7 @@ function quickMatchRanked({ socketId, name }) {
     handicap: {},
     rankedMode: true,
   });
+  room.players[0] = { ...room.players[0], ...myInfo };
   rankedQueue.push(room.code);
   return { room, created: true };
 }
@@ -219,7 +210,15 @@ function startGame(room) {
   room.lastMoveAt = Date.now();
   // 랭크전은 항상 2인 — 게임이 시작된 시점의 두 이름을 따로 저장해둔다.
   // (나중에 한쪽이 방을 나가서 room.players에서 빠지더라도, 승자/패자를 정확히 가리기 위함)
-  if (room.rankedMode) room.rankedParticipants = room.players.map((p) => p.name);
+  if (room.rankedMode) {
+    // 이름뿐 아니라 그 시점의 레이팅/승패 기록도 같이 저장해둔다(나중에 승자/패자 정산할 때 씀).
+    room.rankedParticipants = room.players.map((p) => ({
+      name: p.name,
+      rating: p.rating || 1000,
+      wins: p.wins || 0,
+      losses: p.losses || 0,
+    }));
+  }
 }
 
 function playerName(room, id) {
@@ -442,8 +441,7 @@ module.exports = {
   joinRoom,
   quickMatch,
   quickMatchRanked,
-  applyRankedResult,
-  getRatingInfo,
+  computeRankedResult,
   leaveRoom,
   startGame,
   submitWord,
