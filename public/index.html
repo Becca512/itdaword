@@ -135,6 +135,8 @@
   .team-a{color:var(--blue);}
   .team-b{color:var(--pink);}
   .code-display{font-family:'Noto Sans KR',monospace;font-weight:900;font-size:28px;letter-spacing:4px;text-align:center;padding:16px;background:var(--panel-2);border-radius:16px;margin:12px 0;border:2px dashed var(--purple);color:var(--purple);}
+  .matching-spinner{width:36px;height:36px;margin:16px auto 8px;border-radius:50%;border:4px solid var(--panel-2);border-top-color:var(--orange);animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
   a.back{color:var(--text-dim);font-size:13px;text-decoration:none;cursor:pointer;font-weight:600;}
   a.back:hover{color:var(--text);}
   ::-webkit-scrollbar{width:6px;}
@@ -322,9 +324,15 @@
   <div id="screen-lobby" class="hidden">
     <a class="back" onclick="leaveRoom()">← 나가기</a>
     <div class="card" style="margin-top:14px;">
-      <h3>대기실</h3>
-      <div class="code-display" id="lobby-code">------</div>
-      <p class="muted" style="text-align:center;">이 코드를 공유해서 초대하세요</p>
+      <h3 id="lobby-title">대기실</h3>
+      <div id="lobby-code-block">
+        <div class="code-display" id="lobby-code">------</div>
+        <p class="muted" style="text-align:center;">이 코드를 공유해서 초대하세요</p>
+      </div>
+      <div id="lobby-matching-block" class="hidden">
+        <div class="matching-spinner"></div>
+        <p class="muted" style="text-align:center;">상대를 찾는 중이에요...</p>
+      </div>
       <div class="players" id="lobby-players"></div>
       <p class="muted" id="lobby-info"></p>
       <button class="btn c-green block" id="lobby-start-btn" onclick="startMultiGame()">게임 시작 (방장)</button>
@@ -833,6 +841,7 @@ socket.on('connect', async ()=>{
 
 /* ================= 멀티플레이 ================= */
 async function doCreateRoom(){
+  lobbyMode = 'code';
   myName = document.getElementById('create-name').value.trim() || '방장';
   const maxPlayers = Math.min(8, Math.max(2, parseInt(document.getElementById('create-max').value)||4));
   const timeLimit = Math.min(60, Math.max(5, parseInt(document.getElementById('create-timer').value)||20));
@@ -850,6 +859,7 @@ async function doCreateRoom(){
 }
 
 async function doJoinRoom(){
+  lobbyMode = 'code';
   myName = document.getElementById('join-name').value.trim() || '플레이어';
   const code = document.getElementById('join-code').value.trim().toUpperCase();
   const statusEl = document.getElementById('join-status');
@@ -862,6 +872,7 @@ async function doJoinRoom(){
 }
 
 async function quickMatch(){
+  lobbyMode = 'quick';
   myName = 'Guest' + Math.floor(Math.random()*1000);
   const res = await emitAck('room:quickmatch', { name: myName });
   if(!res.ok){ alert(res.reason || '매칭에 실패했어요.'); return; }
@@ -918,6 +929,7 @@ function refreshMyTierBadge(){
 }
 
 async function doRankedQuickmatch(){
+  lobbyMode = 'ranked';
   const nameInput = document.getElementById('ranked-name');
   const name = nameInput.value.trim();
   if(!name){ showToast('랭크전 닉네임을 입력해 주세요'); nameInput.focus(); return; }
@@ -932,6 +944,8 @@ async function doRankedQuickmatch(){
   enterLobby(res.room);
 }
 
+let lobbyMode = 'code'; // 'code' | 'quick' | 'ranked' — 어떤 경로로 들어왔는지에 따라 대기실 표시를 다르게 한다
+
 function enterLobby(room){
   hideAll();
   document.getElementById('screen-lobby').classList.remove('hidden');
@@ -940,6 +954,10 @@ function enterLobby(room){
 
 function renderLobby(room){
   const isHost = room.hostId === mySocketId;
+  const isRandomEntry = lobbyMode === 'quick' || lobbyMode === 'ranked';
+  document.getElementById('lobby-title').textContent = lobbyMode === 'ranked' ? '🏅 랭크전 매칭' : isRandomEntry ? '빠른 대전 매칭' : '대기실';
+  document.getElementById('lobby-code-block').classList.toggle('hidden', isRandomEntry);
+  document.getElementById('lobby-matching-block').classList.toggle('hidden', !isRandomEntry || room.players.length >= room.maxPlayers);
   document.getElementById('lobby-code').textContent = room.code;
   const list = document.getElementById('lobby-players');
   list.innerHTML = '';
