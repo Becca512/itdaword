@@ -43,7 +43,7 @@ function alt두음(ch) {
 }
 
 // 전체 단어 = 표준국어대사전 21만여 개 + 커스텀 단어장
-const ALL_WORDS = Array.from(new Set([...DICT_FINAL, ...CUSTOM_WORDS.filter((w) => /^[가-힣]{2,6}$/.test(w))]));
+const ALL_WORDS = Array.from(new Set([...DICT_FINAL, ...CUSTOM_WORDS.filter((w) => /^[가-힣]{2,10}$/.test(w))]));
 const WORD_SET = new Set(ALL_WORDS);
 
 // 첫 글자별 단어 목록 (두음법칙과 무관하게 실제 표기 기준으로만 색인)
@@ -76,11 +76,11 @@ async function isValidNext(prevWord, candidate, usedWords, allowDueum, handicap)
   if (typeof candidate !== 'string') return { ok: false, reason: '단어를 입력해 주세요.' };
   const word = candidate.trim();
   const minLen = handicap && handicap.threeOnly ? 3 : 2;
-  const maxLen = handicap && handicap.threeOnly ? 3 : 6;
+  const maxLen = handicap && handicap.threeOnly ? 3 : 10;
   if (word.length < minLen || word.length > maxLen) {
     return handicap && handicap.threeOnly
       ? { ok: false, reason: '핸디캡: 정확히 세 글자 단어만 입력할 수 있어요.' }
-      : { ok: false, reason: '두 글자 이상, 여섯 글자 이하로 입력해 주세요.' };
+      : { ok: false, reason: '두 글자 이상, 열 글자 이하로 입력해 주세요.' };
   }
   if (!/^[가-힣]+$/.test(word)) {
     return { ok: false, reason: '한글 단어만 입력할 수 있어요.' };
