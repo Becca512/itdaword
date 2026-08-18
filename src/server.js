@@ -26,12 +26,25 @@ function broadcastRoom(room) {
   io.to(room.code).emit('room:update', rm.publicRoom(room));
 }
 
+// 랭크전 방이 끝났을 때 딱 한 번만 레이팅을 반영한다 (제출/타임아웃/퇴장 등 여러 경로로 끝날 수 있어서
+// room.rankedApplied 플래그로 중복 반영을 막는다).
+function finalizeRankedIfNeeded(room) {
+  if (!room.rankedMode || room.status !== 'finished' || room.rankedApplied) return;
+  if (!room.winner || !room.rankedParticipants || room.rankedParticipants.length < 2) return;
+  room.rankedApplied = true;
+  const other = room.rankedParticipants.find((n) => n !== room.winner);
+  if (!other) return;
+  const result = rm.applyRankedResult(room.winner, other);
+  if (result) io.to(room.code).emit('ranked:result', result);
+}
+
 function scheduleTurnTimer(room) {
   rm.clearTurnTimer(room);
   if (room.status !== 'playing') return;
   room.turnTimer = setTimeout(() => {
     rm.handleTimeout(room);
     broadcastRoom(room);
+    finalizeRankedIfNeeded(room);
     if (room.status === 'playing') scheduleTurnTimer(room);
   }, room.timeLimit * 1000);
 }
@@ -171,11 +184,19 @@ io.on('connection', (socket) => {
     broadcastRoom(result.room);
   });
 
-  socket.on('room:quickmatch', ({ name }, ack) => {
-    const { room } = rm.quickMatch({ socketId: socket.id, name: name || `Guest${Math.floor(Math.random() * 1000)}` });
+  socket.on('room:quickmatch', ({ name, ranked }, ack) => {
+    const playerName = name || `Guest${Math.floor(Math.random() * 1000)}`;
+    const { room } = ranked
+      ? rm.quickMatchRanked({ socketId: socket.id, name: playerName })
+      : rm.quickMatch({ socketId: socket.id, name: playerName });
     socket.join(room.code);
     ack && ack({ ok: true, room: rm.publicRoom(room) });
     broadcastRoom(room);
+  });
+
+  // 랭크전 레이팅/티어 조회 (닉네임 기준)
+  socket.on('rank:get', ({ name }, ack) => {
+    ack && ack({ ok: true, info: rm.getRatingInfo(name) });
   });
 
   socket.on('room:start', ({ code }, ack) => {
@@ -197,21 +218,31 @@ io.on('connection', (socket) => {
     }
     ack && ack({ ok: true });
     broadcastRoom(result.room);
-    if (result.finished) rm.clearTurnTimer(result.room);
-    else scheduleTurnTimer(result.room);
+    if (result.finished) {
+      rm.clearTurnTimer(result.room);
+      finalizeRankedIfNeeded(result.room);
+    } else {
+      scheduleTurnTimer(result.room);
+    }
   });
 
   socket.on('room:leave', ({ code }) => {
     const room = rm.leaveRoom({ code, socketId: socket.id });
     socket.leave(code);
-    if (room) broadcastRoom(room);
+    if (room) {
+      broadcastRoom(room);
+      finalizeRankedIfNeeded(room);
+    }
   });
 
   socket.on('disconnect', () => {
     for (const [code, room] of rm.rooms) {
       if (room.players.some((p) => p.id === socket.id)) {
         const updated = rm.leaveRoom({ code, socketId: socket.id });
-        if (updated) broadcastRoom(updated);
+        if (updated) {
+          broadcastRoom(updated);
+          finalizeRankedIfNeeded(updated);
+        }
       }
     }
     for (const [gameId, state] of rm.singleGames) {

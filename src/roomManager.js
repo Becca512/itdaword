@@ -24,6 +24,7 @@ function publicRoom(room) {
     teamMode: room.teamMode,
     allowDueum: room.allowDueum,
     handicap: room.handicap,
+    rankedMode: !!room.rankedMode,
     status: room.status,
     players: room.players.map((p) => ({ id: p.id, name: p.name, team: p.team, connected: p.connected })),
     chain: room.chain,
@@ -48,7 +49,7 @@ function assignTeam(room) {
 }
 
 // ---------- 방 생성 / 참가 ----------
-function createRoom({ hostSocketId, name, maxPlayers, timeLimit, teamMode, allowDueum, handicap }) {
+function createRoom({ hostSocketId, name, maxPlayers, timeLimit, teamMode, allowDueum, handicap, rankedMode }) {
   const code = genCode();
   const room = {
     code,
@@ -58,6 +59,8 @@ function createRoom({ hostSocketId, name, maxPlayers, timeLimit, teamMode, allow
     teamMode: !!teamMode,
     allowDueum: !!allowDueum,
     handicap: handicap || {},
+    rankedMode: !!rankedMode,
+    rankedApplied: false, // 레이팅 반영은 딱 한 번만 (타임아웃/제출/퇴장 등 여러 경로로 게임이 끝날 수 있어서)
     status: 'lobby',
     players: [{ id: hostSocketId, name, team: teamMode ? 'A' : null, connected: true }],
     chain: [],
@@ -98,6 +101,85 @@ function quickMatch({ socketId, name }) {
   return { room, created: true };
 }
 
+// ---------- 랭크전 / 티어 ----------
+// 계정 시스템이 없어서 "닉네임"을 식별자로 레이팅을 저장한다 (같은 닉네임 = 같은 기록 이어짐,
+// 서버 재시작하면 초기화, 다른 사람이 같은 닉네임을 쓰면 섞일 수 있음 — 알려진 한계).
+const ratings = new Map(); // name -> { rating, wins, losses }
+const rankedQueue = [];
+
+const TIERS = [
+  { name: '브론즈', min: 0, color: '#B08D57' },
+  { name: '실버', min: 1000, color: '#B9C4CA' },
+  { name: '골드', min: 1200, color: '#FFD23F' },
+  { name: '플래티넘', min: 1400, color: '#5B8CFF' },
+  { name: '다이아몬드', min: 1600, color: '#7FDBFF' },
+  { name: '마스터', min: 1800, color: '#B983FF' },
+];
+
+function getTier(rating) {
+  let tier = TIERS[0];
+  for (const t of TIERS) {
+    if (rating >= t.min) tier = t;
+  }
+  return tier;
+}
+
+function getRatingInfo(name) {
+  const key = (name || '플레이어').trim().slice(0, 20) || '플레이어';
+  if (!ratings.has(key)) ratings.set(key, { rating: 1000, wins: 0, losses: 0 });
+  const r = ratings.get(key);
+  const tier = getTier(r.rating);
+  return { name: key, rating: r.rating, wins: r.wins, losses: r.losses, tier: tier.name, tierColor: tier.color };
+}
+
+// 간이 ELO: K=32. 승자는 (1-기대승률)*K 만큼 얻고, 패자는 그만큼 잃는다.
+function applyRankedResult(winnerName, loserName) {
+  const wKey = (winnerName || '플레이어').trim().slice(0, 20) || '플레이어';
+  const lKey = (loserName || '플레이어').trim().slice(0, 20) || '플레이어';
+  if (wKey === lKey) return null; // 같은 이름이면(식별 불가) 반영하지 않음
+  if (!ratings.has(wKey)) ratings.set(wKey, { rating: 1000, wins: 0, losses: 0 });
+  if (!ratings.has(lKey)) ratings.set(lKey, { rating: 1000, wins: 0, losses: 0 });
+  const w = ratings.get(wKey);
+  const l = ratings.get(lKey);
+  const K = 32;
+  const expectedW = 1 / (1 + Math.pow(10, (l.rating - w.rating) / 400));
+  const delta = Math.max(8, Math.round(K * (1 - expectedW))); // 최소 8점은 오르내리게 (밋밋함 방지)
+  w.rating += delta;
+  l.rating = Math.max(0, l.rating - delta);
+  w.wins += 1;
+  l.losses += 1;
+  return {
+    winner: { ...getRatingInfo(wKey), delta },
+    loser: { ...getRatingInfo(lKey), delta: -delta },
+  };
+}
+
+// 랭크전 전용 빠른 매칭 — 항상 2인, 핸디캡/두음법칙 없이 공정한 기본 규칙으로 고정.
+function quickMatchRanked({ socketId, name }) {
+  while (rankedQueue.length) {
+    const code = rankedQueue[0];
+    const room = rooms.get(code);
+    if (room && room.status === 'lobby' && room.players.length < room.maxPlayers) {
+      room.players.push({ id: socketId, name, team: null, connected: true });
+      rankedQueue.shift(); // 랭크전은 항상 2인이라 채워지면 큐에서 바로 뺀다
+      return { room, created: false };
+    }
+    rankedQueue.shift();
+  }
+  const room = createRoom({
+    hostSocketId: socketId,
+    name,
+    maxPlayers: 2,
+    timeLimit: 20,
+    teamMode: false,
+    allowDueum: false,
+    handicap: {},
+    rankedMode: true,
+  });
+  rankedQueue.push(room.code);
+  return { room, created: true };
+}
+
 function leaveRoom({ code, socketId }) {
   const room = rooms.get(code);
   if (!room) return;
@@ -111,6 +193,8 @@ function leaveRoom({ code, socketId }) {
     rooms.delete(code);
     const qi = quickmatchQueue.indexOf(code);
     if (qi >= 0) quickmatchQueue.splice(qi, 1);
+    const rqi = rankedQueue.indexOf(code);
+    if (rqi >= 0) rankedQueue.splice(rqi, 1);
   } else if (room.hostId === socketId) {
     room.hostId = room.players[0].id;
   }
@@ -133,6 +217,9 @@ function startGame(room) {
   room.players.forEach((p) => (room.scores[p.id] = 0));
   room.winner = null;
   room.lastMoveAt = Date.now();
+  // 랭크전은 항상 2인 — 게임이 시작된 시점의 두 이름을 따로 저장해둔다.
+  // (나중에 한쪽이 방을 나가서 room.players에서 빠지더라도, 승자/패자를 정확히 가리기 위함)
+  if (room.rankedMode) room.rankedParticipants = room.players.map((p) => p.name);
 }
 
 function playerName(room, id) {
@@ -354,6 +441,9 @@ module.exports = {
   createRoom,
   joinRoom,
   quickMatch,
+  quickMatchRanked,
+  applyRankedResult,
+  getRatingInfo,
   leaveRoom,
   startGame,
   submitWord,

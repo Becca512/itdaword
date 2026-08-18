@@ -153,6 +153,15 @@
   .lb-score{flex:none;font-weight:900;font-size:16px;color:var(--orange);}
   .lb-empty{text-align:center;color:var(--text-dim);padding:24px 0;font-size:13px;}
   .rule-hint{font-size:11px;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:7px 12px;margin-bottom:14px;text-align:center;letter-spacing:0.2px;font-weight:700;}
+  .tier-badge-row{display:flex;align-items:center;gap:10px;}
+  .tier-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:900;font-size:14px;border:2px solid var(--tier-color, var(--purple));color:var(--tier-color, var(--purple));}
+  .tier-dot{width:10px;height:10px;border-radius:50%;background:var(--tier-color, var(--purple));}
+  .tier-stats{font-size:12px;color:var(--text-dim);font-weight:700;}
+  .ranked-result-box{margin-top:10px;padding:14px 16px;border-radius:16px;text-align:center;}
+  .ranked-result-box.win{background:rgba(47,217,160,0.1);border:2px solid var(--green);}
+  .ranked-result-box.lose{background:rgba(255,90,95,0.1);border:2px solid var(--danger);}
+  .ranked-result-title{font-weight:900;font-size:16px;margin-bottom:6px;}
+  .ranked-result-delta{font-weight:900;font-size:20px;}
   .gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
   .gauge-label{font-size:11px;color:var(--text-dim);flex:none;white-space:nowrap;font-weight:700;}
   .gaugebar{flex:1;height:10px;background:var(--panel-2);border-radius:999px;overflow:hidden;}
@@ -195,6 +204,13 @@
       <h3 style="margin-bottom:14px;">🏆 랭킹</h3>
       <p class="muted" style="margin-bottom:14px;">누가 가장 높은 난이도에서 AI를 이겼는지 확인해보세요</p>
       <button class="btn c-yellow block" onclick="goLeaderboard()">랭킹 보기</button>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:10px;">🏅 랭크전 — 1:1 실시간 대결</h3>
+      <div class="tier-badge-row" id="my-tier-badge"></div>
+      <p class="muted" style="margin:10px 0 14px;">이기면 레이팅이 오르고 티어가 올라가요. 핸디캡·두음법칙 없이 공정한 기본 규칙으로만 진행돼요.</p>
+      <input type="text" id="ranked-name" placeholder="랭크전 닉네임" autocomplete="off" style="margin-bottom:10px;" onblur="refreshMyTierBadge()">
+      <button class="btn c-purple-o block" onclick="doRankedQuickmatch()">🏅 랭크전 매칭 시작</button>
     </div>
     <div class="card">
       <h3 style="margin-bottom:14px;">멀티플레이 — 2~8인</h3>
@@ -327,6 +343,7 @@
       <div class="players" id="mg-players"></div>
       <div class="chain" id="mg-chain"></div>
       <div class="status" id="mg-status"></div>
+      <div id="mg-ranked-result" class="ranked-result-box hidden"></div>
       <div class="row">
         <input type="text" id="mg-input" placeholder="단어 입력" disabled autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <button class="btn c-orange" id="mg-submit" onclick="submitMulti()" disabled>입력</button>
@@ -362,6 +379,7 @@ socket.on('connect', ()=>{
   mySocketId = socket.id;
   document.getElementById('conn-dot').classList.add('on');
   document.getElementById('conn-text').textContent = '서버 연결됨';
+  refreshMyTierBadge();
 });
 socket.on('disconnect', ()=>{
   document.getElementById('conn-dot').classList.remove('on');
@@ -380,7 +398,7 @@ function emitAck(event, payload){
 
 /* ================= 화면 전환 ================= */
 function hideAll(){ document.querySelectorAll('[id^="screen-"]').forEach(el=>el.classList.add('hidden')); }
-function goHome(){ stopMyTurnTimer(); stopSingleCountdown(); hideAll(); document.getElementById('screen-home').classList.remove('hidden'); }
+function goHome(){ stopMyTurnTimer(); stopSingleCountdown(); hideAll(); document.getElementById('screen-home').classList.remove('hidden'); refreshMyTierBadge(); }
 
 let lbCurrentMode = 'fastest';
 
@@ -771,6 +789,24 @@ socket.on('single:gaugeUpdate', ({ gauge })=>{
   showToast('친구가 참여해서 생명 게이지가 올랐어요! +1%');
 });
 
+// 랭크전 결과 (승자/패자 양쪽 소켓에 다 전송됨 — 내 이름과 비교해서 내가 이겼는지/졌는지 판단)
+socket.on('ranked:result', (result)=>{
+  const box = document.getElementById('mg-ranked-result');
+  if(!box) return;
+  const mine = result.winner.name === myRankedName ? result.winner
+             : result.loser.name === myRankedName ? result.loser
+             : null;
+  if(!mine) return;
+  const won = mine.delta > 0;
+  box.classList.remove('hidden');
+  box.className = 'ranked-result-box ' + (won ? 'win' : 'lose');
+  box.innerHTML = `
+    <div class="ranked-result-title">${won ? '🏅 랭크전 승리!' : '랭크전 패배'}</div>
+    <div class="ranked-result-delta" style="color:${won?'var(--green)':'var(--danger)'}">${won?'+':''}${mine.delta}점</div>
+    <div class="tier-badge" style="--tier-color:${mine.tierColor};margin-top:8px;"><span class="tier-dot"></span>${mine.tier} · ${mine.rating}</div>
+  `;
+});
+
 // 페이지 로드시 ?invite=코드 로 들어왔으면 소켓 연결 직후 자동으로 적립 시도
 (function checkInviteParam(){
   const params = new URLSearchParams(location.search);
@@ -831,6 +867,42 @@ async function quickMatch(){
   enterLobby(res.room);
 }
 
+let myRankedName = localStorage.getItem('itdaword_ranked_name') || '';
+
+function tierBadgeHtml(info){
+  if(!info) return '';
+  return `
+    <span class="tier-badge" style="--tier-color:${info.tierColor}">
+      <span class="tier-dot"></span>${info.tier} · ${info.rating}
+    </span>
+    <span class="tier-stats">${info.wins}승 ${info.losses}패</span>
+  `;
+}
+
+async function refreshMyTierBadge(){
+  const box = document.getElementById('my-tier-badge');
+  const nameInput = document.getElementById('ranked-name');
+  if(myRankedName) nameInput.value = myRankedName;
+  const name = nameInput.value.trim();
+  if(!name){ box.innerHTML = '<span class="muted" style="font-size:12px;">닉네임을 입력하면 내 티어가 보여요</span>'; return; }
+  const res = await emitAck('rank:get', { name });
+  if(res.ok) box.innerHTML = tierBadgeHtml(res.info);
+}
+
+async function doRankedQuickmatch(){
+  const nameInput = document.getElementById('ranked-name');
+  const name = nameInput.value.trim();
+  if(!name){ showToast('랭크전 닉네임을 입력해 주세요'); nameInput.focus(); return; }
+  myRankedName = name;
+  localStorage.setItem('itdaword_ranked_name', name);
+  myName = name;
+  const res = await emitAck('room:quickmatch', { name, ranked: true });
+  if(!res.ok){ alert(res.reason || '매칭에 실패했어요.'); return; }
+  myRoomCode = res.room.code;
+  currentRoom = res.room;
+  enterLobby(res.room);
+}
+
 function enterLobby(room){
   hideAll();
   document.getElementById('screen-lobby').classList.remove('hidden');
@@ -849,7 +921,7 @@ function renderLobby(room){
     div.innerHTML = `<span>${p.name}${p.id===room.hostId?' <span class="pill">방장</span>':''}</span>${teamLabel}`;
     list.appendChild(div);
   });
-  document.getElementById('lobby-info').textContent = `${room.players.length}/${room.maxPlayers}명 · 제한시간 ${room.timeLimit}초 · ${room.teamMode?'팀전':'개인전'}`;
+  document.getElementById('lobby-info').textContent = `${room.rankedMode ? '🏅 랭크전 · ' : ''}${room.players.length}/${room.maxPlayers}명 · 제한시간 ${room.timeLimit}초 · ${room.teamMode?'팀전':'개인전'}`;
   const startBtn = document.getElementById('lobby-start-btn');
   startBtn.classList.toggle('hidden', !isHost);
   startBtn.disabled = room.players.length < 2;
@@ -866,6 +938,7 @@ function renderMultiGame(room){
   hideAll();
   document.getElementById('screen-multi-game').classList.remove('hidden');
   document.getElementById('mg-rule-hint').textContent = buildRuleHintText(room.allowDueum, room.handicap);
+  if(room.status === 'playing') document.getElementById('mg-ranked-result').classList.add('hidden');
 
   const scorebar = document.getElementById('mg-scorebar');
   if(room.teamMode){
